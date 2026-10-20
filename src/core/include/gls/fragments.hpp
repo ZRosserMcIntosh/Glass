@@ -63,10 +63,11 @@ struct Clump {
 // A coarse piece of tempered glass that landed hard: renderers scatter
 // `count` real-size dice here (the physics drew fewer, larger ones).
 struct DiceSpray {
-    Vec3 pos, vel;
+    Vec3 pos, vel, omega;  // the piece's pose and motion as it came apart
     int count = 0;
     Real size = 0, thickness = 0, time = 0;
     int ply = 0;
+    int fragment = -1;     // the piece that came apart (its last pose stays readable)
 };
 
 class FragmentSystem {

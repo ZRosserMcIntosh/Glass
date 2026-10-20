@@ -403,8 +403,9 @@ GLS_EXPORT float* gls_fragment_poses() {
 }
 
 // Dice sprays from index `from`: pieces drawn coarser than the real dice that
-// burst into them on landing. [count, then 11 float32 each: x, y, z, vx, vy,
-// vz, dice count, dice size, thickness, time, ply].
+// came apart into them (in the air, or on landing). [count, then 15 float32
+// each: x, y, z, vx, vy, vz, dice count, dice size, thickness, time, ply,
+// fragment index (its last pose is still in gls_fragment_poses), wx, wy, wz].
 GLS_EXPORT float* gls_sprays(int from) {
     Sim& S = sim();
     S.sprays.assign(1, 0);
@@ -413,11 +414,12 @@ GLS_EXPORT float* gls_sprays(int from) {
     const std::size_t a = static_cast<std::size_t>(std::max(0, from));
     for (std::size_t i = a; i < sp.size(); ++i) {
         const DiceSpray& d = sp[i];
-        const float v[11] = {static_cast<float>(d.pos.x), static_cast<float>(d.pos.y), static_cast<float>(d.pos.z),
+        const float v[15] = {static_cast<float>(d.pos.x), static_cast<float>(d.pos.y), static_cast<float>(d.pos.z),
                              static_cast<float>(d.vel.x), static_cast<float>(d.vel.y), static_cast<float>(d.vel.z),
                              static_cast<float>(d.count), static_cast<float>(d.size), static_cast<float>(d.thickness),
-                             static_cast<float>(d.time), static_cast<float>(d.ply)};
-        S.sprays.insert(S.sprays.end(), v, v + 11);
+                             static_cast<float>(d.time), static_cast<float>(d.ply), static_cast<float>(d.fragment),
+                             static_cast<float>(d.omega.x), static_cast<float>(d.omega.y), static_cast<float>(d.omega.z)};
+        S.sprays.insert(S.sprays.end(), v, v + 15);
     }
     S.sprays[0] = static_cast<float>(sp.size() > a ? sp.size() - a : 0);
     return S.sprays.data();

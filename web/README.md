@@ -27,7 +27,7 @@ until the next call.
 | `G.cracks(g, from)` | float32, 7 per new segment of glass ply g: ax, ay, bx, by, birth time of each end, kind |
 | `G.fragmentShapes(from)` | new pieces: index, ply, chip, thickness, outline about the centroid |
 | `G.fragmentPoses(n)` | float32, 12 per piece: position, quaternion (w, x, y, z), velocity, state (0 held, 1 pending, 2 free, 3 resting, −1 replaced), birth time |
-| `G.sprays(from)` | float32, 11 per new spray: position, velocity, dice count, dice size, thickness, time, ply (a piece drawn coarser than the real dice that burst into them on landing) |
+| `G.sprays(from)` | float32, 15 per new spray: position, velocity, dice count, dice size, thickness, time, ply, fragment index, spin (a piece drawn coarser than the real dice that came apart into them; its last pose stays in `fragmentPoses`) |
 | `G.crushes(from)` | float32, 6 per new crushed disc: glass ply, x, y, radius, time, kind (0 contact damage or cone, 1 projectile); comminuted glass, white to the eye |
 | `G.field(g, nx, ny)` | float32: deflection, then the front and back largest principal stress of ply g on an nx × ny lattice |
 | `G.events(from)` | the engine's log lines |

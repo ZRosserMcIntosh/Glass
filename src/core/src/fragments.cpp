@@ -586,6 +586,8 @@ void FragmentSystem::step(Real dt, Real time, Rng& rng) {
                 d.thickness = f.thickness;
                 d.time = time;
                 d.ply = f.ply;
+                d.omega = f.omega;
+                d.fragment = static_cast<int>(k);
                 sprays_.push_back(d);
                 f.retired = true;
                 f.outline.clear();
@@ -646,6 +648,8 @@ void FragmentSystem::step(Real dt, Real time, Rng& rng) {
                 d.thickness = f.thickness;
                 d.time = time;
                 d.ply = f.ply;
+                d.omega = f.omega;
+                d.fragment = static_cast<int>(k);
                 sprays_.push_back(d);
                 f.retired = true;
                 f.outline.clear();
