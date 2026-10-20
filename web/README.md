@@ -25,7 +25,8 @@ until the next call.
 | `G.impactors(n)` | 20 per impactor: position, velocity, travel axis, phase (0 flight, 1 contact, 2 ballistic, 3 membrane, 4 done), force, squash, contact radius, radius, length, kind, side, hit x, hit y, pushing |
 | `G.report(k)` | `{v, outcome}`: speed in/out, energy in/absorbed, peak force, contact start/time, max stress, depth, bulge, broke, penetrated, rebounded, embedded, diced |
 | `G.cracks(g, from)` | float32, 7 per new segment of glass ply g: ax, ay, bx, by, birth time of each end, kind |
-| `G.fragmentShapes(from)` | new pieces: index, ply, chip, thickness, outline about the centroid |
+| `G.fragmentShapes(from)` | new pieces: index, ply, chip, thickness, outline about the centroid, holes (loops cut out of it) |
+| `G.fragmentMap(ply)` | which piece each crack-grid cell of a glazing ply belongs to (`-1` none), rows from the bottom |
 | `G.fragmentPoses(n)` | float32, 12 per piece: position, quaternion (w, x, y, z), velocity, state (0 held, 1 pending, 2 free, 3 resting, −1 replaced), birth time |
 | `G.sprays(from)` | float32, 15 per new spray: position, velocity, dice count, dice size, thickness, time, ply, fragment index, spin (a piece drawn coarser than the real dice that came apart into them; its last pose stays in `fragmentPoses`) |
 | `G.crushes(from)` | float32, 6 per new crushed disc: glass ply, x, y, radius, time, kind (0 contact damage or cone, 1 projectile); comminuted glass, white to the eye |

@@ -34,6 +34,7 @@ struct Sim {
     std::vector<double> state, imps, plies, report;
     std::vector<float> cracks, frags, poses, field;
     std::vector<float> sprays, crushes;
+    std::vector<std::int32_t> labels;
 };
 
 Sim* g = nullptr;
@@ -189,6 +190,7 @@ GLS_EXPORT int gls_catalog() {
         o += ",\"mass\":"; jsonNum(o, d.mass);
         o += ",\"radius\":"; jsonNum(o, d.radius);
         o += ",\"length\":"; jsonNum(o, d.length);
+        o += ",\"pellets\":"; jsonNum(o, d.pellets);
         o += ",\"speed\":"; jsonNum(o, d.speed);
         o += ",\"minSpeed\":"; jsonNum(o, d.minSpeed);
         o += ",\"maxSpeed\":"; jsonNum(o, d.maxSpeed);
@@ -358,7 +360,8 @@ GLS_EXPORT float* gls_cracks(int gi, int from) {
 }
 
 // Fragment shapes from record `from`: [count, then per fragment: index, ply,
-// chip, thickness, n, then n (x, y) pairs about the centroid] as float32.
+// chip, thickness, n, then n (x, y) pairs about the centroid, then the number
+// of holes and for each its point count and (x, y) pairs] as float32.
 GLS_EXPORT float* gls_fragment_shapes(int from) {
     Sim& S = sim();
     S.frags.assign(1, 0);
@@ -375,6 +378,14 @@ GLS_EXPORT float* gls_fragment_shapes(int from) {
         for (const auto& p : f.outline) {
             S.frags.push_back(static_cast<float>(p.x));
             S.frags.push_back(static_cast<float>(p.y));
+        }
+        S.frags.push_back(static_cast<float>(f.holes.size()));
+        for (const auto& h : f.holes) {
+            S.frags.push_back(static_cast<float>(h.size()));
+            for (const auto& p : h) {
+                S.frags.push_back(static_cast<float>(p.x));
+                S.frags.push_back(static_cast<float>(p.y));
+            }
         }
     }
     S.frags[0] = static_cast<float>(fr.size() > a ? fr.size() - a : 0);
@@ -423,6 +434,21 @@ GLS_EXPORT float* gls_sprays(int from) {
     }
     S.sprays[0] = static_cast<float>(sp.size() > a ? sp.size() - a : 0);
     return S.sprays.data();
+}
+
+// Which piece each crack-grid cell of glazing ply `ply` belongs to: [nx, ny,
+// then nx * ny fragment indices (-1: none)] as int32, rows from the bottom.
+GLS_EXPORT std::int32_t* gls_fragment_map(int ply) {
+    Sim& S = sim();
+    S.labels.assign(2, 0);
+    if (!S.pane) return S.labels.data();
+    const auto& maps = S.pane->fragments().maps;
+    if (ply < 0 || ply >= static_cast<int>(maps.size())) return S.labels.data();
+    const auto& m = maps[ply];
+    S.labels[0] = m.nx;
+    S.labels[1] = m.ny;
+    S.labels.insert(S.labels.end(), m.label.begin(), m.label.end());
+    return S.labels.data();
 }
 
 // Crushed discs from index `from`: comminuted glass, white to the eye.

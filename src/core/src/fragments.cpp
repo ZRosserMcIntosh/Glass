@@ -107,10 +107,28 @@ void finishFragment(Fragment& f, Real density) {
     Vec2 c;
     const Real a = polygonArea(f.outline, &c);
     if (a < 0) std::reverse(f.outline.begin(), f.outline.end());
+    // Holes: clockwise, and taken out of the area and the centroid.
+    Real area = std::fabs(a);
+    Vec2 sum = c * area;
+    for (auto& h : f.holes) {
+        Vec2 ch;
+        const Real ah = polygonArea(h, &ch);
+        if (ah > 0) std::reverse(h.begin(), h.end());
+        area -= std::fabs(ah);
+        sum = sum - ch * std::fabs(ah);
+    }
+    if (area > 1e-12) c = sum / area;
+    else area = std::fabs(a);
     for (auto& p : f.outline) p -= c;
-    f.area = std::fabs(a);
+    for (auto& h : f.holes)
+        for (auto& p : h) p -= c;
+    f.area = area;
     f.mass = std::max(1e-7, density * f.thickness * f.area);
-    const Vec2 mom = polygonMoments(f.outline);
+    Vec2 mom = polygonMoments(f.outline);
+    for (const auto& h : f.holes) {
+        std::vector<Vec2> ccw(h.rbegin(), h.rend());
+        mom = mom - polygonMoments(ccw);
+    }
     const Real tt = f.thickness * f.thickness / 12;
     f.inertia = {density * f.thickness * mom.x + f.mass * tt, density * f.thickness * mom.y + f.mass * tt,
                  density * f.thickness * (mom.x + mom.y)};
@@ -309,6 +327,7 @@ int FragmentSystem::build(const CrackNetwork& net, int ply, Real zMid, Real thic
         const int r = edges[e0].region;
         std::vector<Vec2> best;
         Real bestArea = 0;
+        std::vector<std::vector<Vec2>> loops;
         for (std::size_t s = e0; s < e1; ++s) {
             if (used[s]) continue;
             std::vector<Vec2> loop;
@@ -331,7 +350,13 @@ int FragmentSystem::build(const CrackNetwork& net, int ply, Real zMid, Real thic
                 cur = nxt;
             }
             const Real a = std::fabs(polygonArea(loop));
-            if (a > bestArea) { bestArea = a; best.swap(loop); }
+            if (a > bestArea) {
+                if (best.size() >= 3) loops.push_back(std::move(best));
+                bestArea = a;
+                best = std::move(loop);
+            } else if (loop.size() >= 3) {
+                loops.push_back(std::move(loop));
+            }
         }
         e0 = e1;
         if (best.size() < 3 || static_cast<int>(frags_.size()) >= maxFragments) continue;
@@ -339,6 +364,9 @@ int FragmentSystem::build(const CrackNetwork& net, int ply, Real zMid, Real thic
         f.ply = ply;
         f.thickness = thickness;
         f.outline = simplifyClosed(best, 0.75 * cell);
+        // The other loops are holes through it (worth keeping above a few cells).
+        for (auto& l : loops)
+            if (std::fabs(polygonArea(l)) > 4 * cell * cell) f.holes.push_back(simplifyClosed(l, 0.75 * cell));
         f.origin = {0, 0};
         finishFragment(f, density);
         f.pos = {f.origin.x, f.origin.y, zMid};
@@ -542,6 +570,7 @@ void FragmentSystem::split(std::size_t k, Rng& rng, Real time) {
     for (int s = 0; s < 2; ++s) {
         Fragment f = parent;
         f.outline = halves[s];
+        f.holes.clear();  // a hole is rarely what a landing cuts through; drop it from the halves
         for (auto& p : f.outline) p += shift;
         f.origin = {0, 0};
         finishFragment(f, density);

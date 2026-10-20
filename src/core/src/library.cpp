@@ -269,6 +269,12 @@ void readImpactor(const json::Value& o, std::vector<ImpactorDef>& out, std::vect
     r.num("min_speed_ms", 1, d.minSpeed, 0, 3000);
     r.num("max_speed_ms", 1, d.maxSpeed, 0, 3000);
     r.num("porosity", 1, d.porosity, 0, 0.9);
+    Real pellets = 1;
+    r.num("pellets", 1, pellets, 1, 64);
+    d.pellets = static_cast<int>(pellets);
+    r.num("spread_mrad", 1e-3, d.spread, 0, 200);
+    r.num("range_m", 1, d.range, 0.1, 200);
+    r.num("shot_string_m", 1, d.stringLength, 0, 10);
     r.provenance(d.provenance);
     r.finish();
     if (d.id.empty()) r.error("missing id");

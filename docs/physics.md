@@ -148,7 +148,10 @@ pieces always cover the whole ply (coarser, never missing). Each piece gets the 
 spin, the impactor's velocity if it lies in its path, and for tempered glass a
 small kick from the released strain energy. A piece stays if it sits on the
 bottom edge, is wedged across two edges, or the gasket's grip on its edge
-(N/m) holds its weight. Free pieces fly with gravity and quadratic drag on a fixed 0.5 ms step, hit the
+(N/m) holds its weight, whatever the plate is doing under it; only pieces
+small beside an object passing through (four times its push radius) go with
+it. A region with loops inside it (a hole punched through) keeps them as
+holes, out of its area, mass and inertia. Free pieces fly with gravity and quadratic drag on a fixed 0.5 ms step, hit the
 floor with restitution 0.25 and friction 0.45, sleep when they settle, and
 break again along a random line if a landing's energy beats 40 × the new crack
 surface energy. A piece resting on the floor loses spin to rolling friction,
@@ -184,6 +187,11 @@ the floor if it lands first, into a spray of real-size dice that renderers
 scatter (`G.sprays`). New impacts make the dice near them re-check.
 
 ## 6. Bullets
+
+A shot load (`pellets` > 1, e.g. 00 buckshot) fires each pellet as its own
+projectile: a seeded angle off the aim (rms `spread_mrad`, landing where it
+carries over `range_m`), a 2 % speed scatter and a place in a shot string
+`shot_string_m` long, so the pellets arrive one after another.
 
 Each glass ply crushes a cone (68° half-angle) whose radius grows through the
 ply from the damage in front, up to 30 mm; the energy absorbed is the

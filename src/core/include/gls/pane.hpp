@@ -164,6 +164,8 @@ public:
     // Aims at pane point `at` from `lead` metres away at `speed`, with the
     // travel tilted by yaw (about y) and pitch (about x). fromBack strikes
     // the back face.
+    // A shot load (def.pellets > 1) fires every pellet, scattered over its
+    // pattern; the first pellet's index is returned, the rest follow it.
     int fire(const ImpactorDef& def, Vec2 at, Real speed, Real yaw = 0, Real pitch = 0, bool fromBack = false,
              Real lead = 0.25);
 
@@ -219,6 +221,7 @@ private:
     void breakAtLoad(int k, int g, Real sigma, Real strength, int radials);
     void startRadials(int g, Vec2 c, Real r0, int n, std::uint32_t group, CrackKind kind, Real speed);
     void startMembrane(int k);
+    int fireOne(const ImpactorDef& def, Vec2 at, Real speed, Real yaw, Real pitch, bool fromBack, Real lead);
     void crush(int g, Vec2 c, Real r, std::uint32_t group, int kind);
     void passThrough(int k, Real massShare);
     void ballisticEvents(int k);

@@ -119,6 +119,54 @@ TEST_CASE("annealed: a steel BB leaves a Hertzian cone hole") {
     CHECK(s.report.outcome.find("cone") != std::string::npos);
 }
 
+TEST_CASE("annealed: small objects through the glass leave the pane in its frame") {
+    // A BB or a bullet holes the pane; the pane around the hole stays put
+    // (it used to be carried off with the projectile, or shaken loose).
+    for (const char* im : {"bb", "pistol_9mm", "magnum_44", "rifle_762"}) {
+        auto s = shoot("annealed_6", im, -1, 2, 1, false, {-1, -1}, 0.3);
+        double heldArea = 0;
+        int bigFree = 0;
+        for (const auto& f : s.pane->fragments().fragments()) {
+            if (f.chip || f.retired) continue;
+            if (f.state == FragmentState::Held) heldArea += f.area;
+            else if (f.radius > 0.05) ++bigFree;
+        }
+        const GlazingDef& g = s.pane->glazing();
+        std::cout << "    " << im << ": " << 100 * heldArea / (g.width * g.height) << " % of the pane still in the frame\n";
+        CHECK(s.report.penetrated || std::string(im) == "bb");
+        CHECK(heldArea > 0.95 * g.width * g.height);
+        CHECK(bigFree == 0);
+    }
+}
+
+TEST_CASE("buckshot: nine pellets, through float glass, stopped by armour") {
+    const auto& lib = glstest::library();
+    const ImpactorDef& d = *lib.impactor("buckshot_00");
+    CHECK(d.pellets == 9);
+    for (const char* glazing : {"annealed_6", "armoured_windscreen"}) {
+        const GlazingDef& g = *lib.glazing(glazing);
+        Pane p(g, budgetForTier(1), 1);
+        const int first = p.fire(d, {0.5 * g.width, 0.5 * g.height}, d.speed, 0, 0, false, 0.85);
+        p.advance(0.05);
+        CHECK(first == 0);
+        CHECK(p.impactors().size() == 9u);
+        int through = 0, hit = 0;
+        double spreadX = 0;
+        for (const auto& I : p.impactors()) {
+            if (!I.touched) continue;
+            ++hit;
+            through += I.report.penetrated ? 1 : 0;
+            spreadX = std::max(spreadX, std::fabs(I.hit.x - 0.5 * g.width));
+        }
+        std::cout << "    " << glazing << ": " << hit << " pellets on the glass, " << through << " through, widest "
+                  << 100 * spreadX << " cm from the aim\n";
+        CHECK(hit >= 7);
+        CHECK_RANGE(spreadX, 0.02, 0.25);
+        if (std::string(glazing) == "annealed_6") CHECK(through == hit);
+        else CHECK(through == 0);
+    }
+}
+
 TEST_CASE("heat-strengthened and tempered glass take more than annealed") {
     // Raise the speed of a 227 g ball until each breaks.
     auto threshold = [](const char* g) {

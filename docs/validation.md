@@ -40,6 +40,8 @@ built to that standard does, not a certification.
 | Baseball at 40 m/s on 4 mm annealed | Breaks the window | Breaks through, keeps ~80 % of its energy |
 | 9 mm on 6 mm annealed / on a windscreen | Glass does not stop pistol bullets | Through at 316 / 346 m/s |
 | Window punch on tempered 6 mm / car side glass, 2 s later | The pane empties from the hole up, a fringe stays in the frame | Above the hole goes first; 7 % of the dice left, all within 6 cm of the frame |
+| BB, 9 mm, .44 Magnum, 7.62 mm through 6 mm annealed | The pane stays in its frame round the hole | Over 99.9 % of the pane held; only chips round the hole fall |
+| 00 buckshot (9 pellets, 395 m/s, from 7 m) on 6 mm annealed / on the armoured windscreen | Through plate glass; stopped by handgun-rated armour | All through at 210-240 m/s, a ragged hole larger than the pattern; all stopped in the third ply |
 | Same seed twice; another seed | Identical; different | Identical; different |
 | Same shot at 60 and 997 host frames per second | Identical | Identical |
 | Same shot on every tier | Same outcome | Same outcome (penetrated / held) |

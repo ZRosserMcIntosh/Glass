@@ -97,6 +97,11 @@ struct ImpactorDef {
     Real tipAngle = deg(60);        // sharp tips: cone half-angle
     Real speed = 5, minSpeed = 0.5, maxSpeed = 50;  // m/s, the demo's range
     Real porosity = 0;              // soft bodies (bird substitute)
+    // Shot loads: several identical pellets per shot, scattered about the aim
+    // point (rms angle `spread`, rad) as fired from `range` metres, arriving
+    // as a string `stringLength` metres long.
+    int pellets = 1;
+    Real spread = 0, range = 7, stringLength = 0;
     std::map<std::string, std::string> provenance;
 
     Real contactCurvature() const { return contactRadius > 0 ? contactRadius : radius; }

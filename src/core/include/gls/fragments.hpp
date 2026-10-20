@@ -21,6 +21,7 @@ enum class FragmentState : std::uint8_t { Held = 0, Pending = 1, Free = 2, Resti
 struct Fragment {
     int ply = 0;
     std::vector<Vec2> outline;  // polygon about the centroid, m (pane-aligned at birth)
+    std::vector<std::vector<Vec2>> holes;  // loops cut out of it (a hole punched through), clockwise, about the centroid
     Vec2 origin;                // centroid in the pane at birth
     Real area = 0, mass = 0, thickness = 0;
     Vec3 inertia;               // principal moments in the body frame, kg*m^2

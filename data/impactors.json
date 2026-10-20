@@ -393,6 +393,34 @@
         "speed_ms": "published: typical 9 mm FMJ from a 225 mm submachine-gun barrel, ~390-410 m/s",
         "yield_MPa": "estimated: as pistol_9mm"
       }
+    },
+    {
+      "id": "buckshot_00",
+      "name": "00 buckshot (9 pellets)",
+      "category": "ballistic",
+      "description": "A 12-gauge 00 buck shell at 7 m: nine 8.4 mm lead balls in a pattern about 20 cm across, arriving one after another. Mass and energy shown are per pellet.",
+      "kind": "projectile",
+      "mass_g": 3.5,
+      "radius_mm": 4.19,
+      "length_mm": 8.38,
+      "youngs_GPa": 16,
+      "poisson": 0.42,
+      "density_kgm3": 11000,
+      "yield_MPa": 40,
+      "speed_ms": 395,
+      "min_speed_ms": 100,
+      "max_speed_ms": 460,
+      "pellets": 9,
+      "spread_mrad": 6.5,
+      "range_m": 7,
+      "shot_string_m": 0.5,
+      "provenance": {
+        "mass_g": "published: 00 buck pellet 0.33 in (8.38 mm), 53.8 gr (3.49 g); 9 per 2-3/4 in 12-gauge shell",
+        "speed_ms": "published: 1,325 ft/s (404 m/s) muzzle for standard 00 buck loads; about 395 m/s at 7 m",
+        "spread_mrad": "estimated: a cylinder-bore pattern of about 1 in per yard, 90 % of pellets within about 20 cm at 7 m",
+        "yield_MPa": "estimated: antimony-hardened lead shot, dynamic flow stress",
+        "shot_string_m": "estimated: shot string of a few tens of centimetres at short range"
+      }
     }
   ]
 }

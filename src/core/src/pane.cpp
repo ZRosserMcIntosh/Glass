@@ -158,6 +158,22 @@ int Pane::launch(const ImpactorDef& d, const Vec3& pos, const Vec3& vel) {
 }
 
 int Pane::fire(const ImpactorDef& d, Vec2 at, Real speed, Real yaw, Real pitch, bool fromBack, Real lead) {
+    if (d.pellets <= 1) return fireOne(d, at, speed, yaw, pitch, fromBack, lead);
+    // A shot load: each pellet leaves at its own small angle (rms `spread`)
+    // and a little faster or slower, and lands where that angle carries it over
+    // the range; the shot string spreads their arrival.
+    int first = -1;
+    for (int k = 0; k < d.pellets; ++k) {
+        const Real ax = d.spread * rng_.normal(), ay = d.spread * rng_.normal();
+        const Vec2 off{std::tan(ax) * d.range, std::tan(ay) * d.range};
+        const Real v = speed * (1 + 0.02 * rng_.normal());
+        const int i = fireOne(d, at + off, v, yaw + ax, pitch + ay, fromBack, lead + d.stringLength * rng_.uniform());
+        if (first < 0) first = i;
+    }
+    return first;
+}
+
+int Pane::fireOne(const ImpactorDef& d, Vec2 at, Real speed, Real yaw, Real pitch, bool fromBack, Real lead) {
     Vec3 dir{std::sin(yaw) * std::cos(pitch), std::sin(pitch), std::cos(yaw) * std::cos(pitch)};
     if (fromBack) dir.z = -dir.z;
     const Real nose = noseOffset(d);
@@ -1489,8 +1505,10 @@ void Pane::freezeCheck() {
             for (const auto& I : imp_) {
                 if (!I.touched || I.side * I.vel.z <= 0.05) continue;
                 // The ring of dice bordering what it crushed is shoved aside too.
+                // Only pieces small beside the object go with it: a BB through
+                // a pane does not carry the rest of the pane.
                 const Real reach = kPushRadius * std::max(I.def.radius, I.contactRadius) + (G.dicing ? G.diceSpacing : 0.0);
-                if (length(c - I.hit) < reach + 0.5 * f.radius) {
+                if (f.radius < 4 * reach && length(c - I.hit) < reach + std::min(0.5 * f.radius, reach)) {
                     pushed = true;
                     const Vec2 out = normalize(c - I.hit);
                     f.vel = I.vel * rng_.uniform(0.6, 1.0) + Vec3{out.x, out.y, 0} * (0.1 * length(I.vel));
@@ -1515,7 +1533,10 @@ void Pane::freezeCheck() {
                 }
             }
             bool supported = false;
-            if (!pushed && std::fabs(f.vel.z) < 1.0) {
+            // A piece the frame holds stays whatever the plate is doing under it
+            // (its centroid can sit right on the impact); a loose one only if
+            // it is not already flying.
+            if (!pushed && (f.edges || std::fabs(f.vel.z) < 1.0)) {
                 int edgesTouched = 0;
                 for (int b = 0; b < 4; ++b) edgesTouched += (f.edges >> b) & 1;
                 if ((f.edges & 4) && f.edgeContact >= 0.01) supported = true;      // sits on the setting blocks
