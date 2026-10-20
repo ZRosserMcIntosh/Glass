@@ -919,8 +919,8 @@ void Pane::breakAtLoad(int k, int g, Real sigma, Real strength, int radials) {
         s.nextStrength = rng_.weibull(G.mat->weibullScale * std::pow(1.0 / (2 * kPi * 0.05 * h * 10), 1.0 / G.mat->weibullModulus),
                                       G.mat->weibullModulus);
         stars_.push_back(s);
-        log(fmt("ply %.0f breaks under the load: %.0f MPa against %.0f MPa", g + 1, sigma / 1e6, strength / 1e6) +
-            fmt(", %.0f radial cracks", n));
+        log(fmt("ply %.0f breaks under the load (local strength %.0f MPa), %.0f radial cracks", g + 1,
+                std::min(sigma, strength) / 1e6, n));
     }
     if (I.phase != ImpactorPhase::Contact) return;
     if (monolithic_) {
