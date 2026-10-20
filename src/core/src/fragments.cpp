@@ -1,0 +1,441 @@
+// Glass Dynamics — engine-independent glazing fracture core.
+// SPDX-License-Identifier: MIT
+#include "gls/fragments.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <tuple>
+
+namespace gls {
+
+Real polygonArea(const std::vector<Vec2>& p, Vec2* centroid) {
+    Real a = 0, cx = 0, cy = 0;
+    const std::size_t n = p.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        const Vec2& u = p[i];
+        const Vec2& v = p[(i + 1) % n];
+        const Real c = cross(u, v);
+        a += c;
+        cx += (u.x + v.x) * c;
+        cy += (u.y + v.y) * c;
+    }
+    a *= 0.5;
+    if (centroid) *centroid = std::fabs(a) > 1e-30 ? Vec2{cx / (6 * a), cy / (6 * a)} : (n ? p[0] : Vec2{});
+    return a;
+}
+
+namespace {
+
+// Second moments of area about the origin: (int y^2, int x^2).
+Vec2 polygonMoments(const std::vector<Vec2>& p) {
+    Real ixx = 0, iyy = 0;
+    const std::size_t n = p.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        const Vec2& u = p[i];
+        const Vec2& v = p[(i + 1) % n];
+        const Real c = cross(u, v);
+        ixx += c * (u.y * u.y + u.y * v.y + v.y * v.y);
+        iyy += c * (u.x * u.x + u.x * v.x + v.x * v.x);
+    }
+    return {std::fabs(ixx) / 12, std::fabs(iyy) / 12};
+}
+
+Real segDistance(Vec2 p, Vec2 a, Vec2 b) {
+    const Vec2 d = b - a;
+    const Real l2 = dot(d, d);
+    const Real t = l2 > 0 ? clampr(dot(p - a, d) / l2, 0, 1) : 0;
+    return length(p - (a + d * t));
+}
+
+void douglasPeucker(const std::vector<Vec2>& in, std::size_t i0, std::size_t i1, Real tol, std::vector<char>& keep) {
+    if (i1 <= i0 + 1) return;
+    Real best = -1;
+    std::size_t at = i0;
+    for (std::size_t i = i0 + 1; i < i1; ++i) {
+        const Real d = segDistance(in[i], in[i0], in[i1]);
+        if (d > best) { best = d; at = i; }
+    }
+    if (best > tol) {
+        keep[at] = 1;
+        douglasPeucker(in, i0, at, tol, keep);
+        douglasPeucker(in, at, i1, tol, keep);
+    }
+}
+
+std::vector<Vec2> simplifyClosed(const std::vector<Vec2>& loop, Real tol) {
+    const std::size_t n = loop.size();
+    if (n <= 4) return loop;
+    // Split at the vertex farthest from the first.
+    std::size_t far = 0;
+    Real best = -1;
+    for (std::size_t i = 1; i < n; ++i) {
+        const Real d = length(loop[i] - loop[0]);
+        if (d > best) { best = d; far = i; }
+    }
+    std::vector<Vec2> ring(loop);
+    ring.push_back(loop[0]);
+    std::vector<char> keep(ring.size(), 0);
+    keep[0] = keep[far] = keep[ring.size() - 1] = 1;
+    douglasPeucker(ring, 0, far, tol, keep);
+    douglasPeucker(ring, far, ring.size() - 1, tol, keep);
+    std::vector<Vec2> out;
+    for (std::size_t i = 0; i + 1 < ring.size(); ++i)
+        if (keep[i]) out.push_back(ring[i]);
+    return out.size() >= 3 ? out : loop;
+}
+
+// Sutherland-Hodgman: the part of polygon p with dot(x, n) >= 0.
+std::vector<Vec2> clipHalf(const std::vector<Vec2>& p, Vec2 n) {
+    std::vector<Vec2> out;
+    const std::size_t m = p.size();
+    for (std::size_t i = 0; i < m; ++i) {
+        const Vec2 a = p[i], b = p[(i + 1) % m];
+        const Real da = dot(a, n), db = dot(b, n);
+        if (da >= 0) out.push_back(a);
+        if ((da >= 0) != (db >= 0)) out.push_back(a + (b - a) * (da / (da - db)));
+    }
+    return out;
+}
+
+Vec3 bodyInverse(const Quat& q, const Vec3& I, const Vec3& x) {
+    const Quat c{q.w, -q.x, -q.y, -q.z};
+    const Vec3 b = c.rotate(x);
+    return q.rotate({b.x / I.x, b.y / I.y, b.z / I.z});
+}
+
+void finishFragment(Fragment& f, Real density) {
+    Vec2 c;
+    const Real a = polygonArea(f.outline, &c);
+    if (a < 0) std::reverse(f.outline.begin(), f.outline.end());
+    for (auto& p : f.outline) p -= c;
+    f.area = std::fabs(a);
+    f.mass = std::max(1e-7, density * f.thickness * f.area);
+    const Vec2 mom = polygonMoments(f.outline);
+    const Real tt = f.thickness * f.thickness / 12;
+    f.inertia = {density * f.thickness * mom.x + f.mass * tt, density * f.thickness * mom.y + f.mass * tt,
+                 density * f.thickness * (mom.x + mom.y)};
+    f.inertia.x = std::max(f.inertia.x, 1e-14);
+    f.inertia.y = std::max(f.inertia.y, 1e-14);
+    f.inertia.z = std::max(f.inertia.z, 1e-14);
+    f.radius = 0;
+    for (const auto& p : f.outline) f.radius = std::max(f.radius, length(p));
+    f.origin = f.origin + c;
+}
+
+}  // namespace
+
+void FragmentSystem::clear() {
+    frags_.clear();
+    maps.clear();
+    nextId_ = 1;
+    ++revision;
+}
+
+int FragmentSystem::build(const CrackNetwork& net, int ply, Real zMid, Real thickness, Real density, Real time) {
+    const int nx = net.nx(), ny = net.ny();
+    const Real cell = net.cell();
+    const auto& g = net.grid();
+    const std::size_t N = g.size();
+    if (static_cast<int>(maps.size()) <= ply) maps.resize(ply + 1);
+    PlyMap& pm = maps[ply];
+    if (pm.label.size() != N) {
+        pm.nx = nx; pm.ny = ny; pm.cell = cell;
+        pm.label.assign(N, -1);
+    }
+
+    auto fillable = [&](std::uint32_t c) {
+        return !(c & CrackNetwork::kRemoved) && !(c & CrackNetwork::kCrush) && (c & CrackNetwork::kIdMask) == 0;
+    };
+    // 1. Flood fill the uncracked cells.
+    std::vector<std::int32_t> lab(N, -1);
+    std::vector<std::int32_t> queue;
+    queue.reserve(1024);
+    int regions = 0;
+    for (std::size_t s = 0; s < N; ++s) {
+        if (lab[s] >= 0 || !fillable(g[s])) continue;
+        lab[s] = regions;
+        queue.clear();
+        queue.push_back(static_cast<std::int32_t>(s));
+        for (std::size_t h = 0; h < queue.size(); ++h) {
+            const int c = queue[h], i = c % nx, j = c / nx;
+            const int nb[4] = {i > 0 ? c - 1 : -1, i < nx - 1 ? c + 1 : -1, j > 0 ? c - nx : -1, j < ny - 1 ? c + nx : -1};
+            for (const int q : nb)
+                if (q >= 0 && lab[q] < 0 && fillable(g[q])) { lab[q] = regions; queue.push_back(q); }
+        }
+        ++regions;
+    }
+    // 2. Dilate into crack cells so neighbouring pieces tile the pane.
+    for (int pass = 0; pass < 2; ++pass) {
+        std::vector<std::int32_t> next = lab;
+        for (std::size_t c = 0; c < N; ++c) {
+            if (lab[c] >= 0 || (g[c] & CrackNetwork::kRemoved) || (g[c] & CrackNetwork::kCrush)) continue;
+            const int i = static_cast<int>(c) % nx, j = static_cast<int>(c) / nx;
+            const int nb[4] = {i > 0 ? int(c) - 1 : -1, i < nx - 1 ? int(c) + 1 : -1, j > 0 ? int(c) - nx : -1,
+                               j < ny - 1 ? int(c) + nx : -1};
+            for (const int q : nb)
+                if (q >= 0 && lab[q] >= 0) { next[c] = lab[q]; break; }
+        }
+        lab.swap(next);
+    }
+    // 3. Which regions are unchanged pieces that already exist.
+    std::vector<int> count(regions, 0), owner(regions, -2);
+    for (std::size_t c = 0; c < N; ++c) {
+        if (lab[c] < 0) continue;
+        ++count[lab[c]];
+        const int old = pm.label[c];
+        int& o = owner[lab[c]];
+        if (o == -2) o = old;
+        else if (o != old) o = -1;
+    }
+    std::vector<int> oldCount;
+    {
+        int maxOld = -1;
+        for (auto v : pm.label) maxOld = std::max(maxOld, static_cast<int>(v));
+        oldCount.assign(maxOld + 1, 0);
+        for (auto v : pm.label)
+            if (v >= 0) ++oldCount[v];
+    }
+    std::vector<char> isNew(regions, 1);
+    for (int r = 0; r < regions; ++r)
+        if (owner[r] >= 0 && oldCount[owner[r]] == count[r]) isNew[r] = 0;
+    // Old pieces that were split are retired.
+    for (std::size_t c = 0; c < N; ++c) {
+        if (lab[c] < 0 || !isNew[lab[c]]) continue;
+        const int old = pm.label[c];
+        if (old >= 0 && old < static_cast<int>(frags_.size()) && !frags_[old].retired) {
+            frags_[old].retired = true;
+            frags_[old].outline.clear();
+        }
+    }
+
+    // 4. Boundary edges of every new region, region on the left (CCW).
+    struct Edge {
+        std::int32_t region;
+        std::int32_t from, to;
+    };
+    std::vector<Edge> edges;
+    std::vector<Real> edgeLen(regions, 0);
+    std::vector<std::uint8_t> edgeMask(regions, 0);
+    const int cx = nx + 1;
+    auto corner = [&](int i, int j) { return j * cx + i; };
+    for (int j = 0; j < ny; ++j) {
+        for (int i = 0; i < nx; ++i) {
+            const int c = j * nx + i, r = lab[c];
+            if (r < 0 || !isNew[r]) continue;
+            auto other = [&](int ii, int jj) {
+                if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) return -1;
+                return static_cast<int>(lab[jj * nx + ii]);
+            };
+            if (other(i, j - 1) != r) edges.push_back({r, corner(i, j), corner(i + 1, j)});
+            if (other(i + 1, j) != r) edges.push_back({r, corner(i + 1, j), corner(i + 1, j + 1)});
+            if (other(i, j + 1) != r) edges.push_back({r, corner(i + 1, j + 1), corner(i, j + 1)});
+            if (other(i - 1, j) != r) edges.push_back({r, corner(i, j + 1), corner(i, j)});
+            if (i == 0) { edgeLen[r] += cell; edgeMask[r] |= 1; }
+            if (i == nx - 1) { edgeLen[r] += cell; edgeMask[r] |= 2; }
+            if (j == 0) { edgeLen[r] += cell; edgeMask[r] |= 4; }
+            if (j == ny - 1) { edgeLen[r] += cell; edgeMask[r] |= 8; }
+        }
+    }
+    std::sort(edges.begin(), edges.end(),
+              [](const Edge& a, const Edge& b) { return std::tie(a.region, a.from) < std::tie(b.region, b.from); });
+
+    // 5. Chain each region's edges into loops; the largest is the outline.
+    std::vector<int> regionIndex(regions, -1);
+    int added = 0;
+    std::size_t e0 = 0;
+    std::vector<char> used(edges.size(), 0);
+    const Real W = net.width(), H = net.height();
+    while (e0 < edges.size()) {
+        std::size_t e1 = e0;
+        while (e1 < edges.size() && edges[e1].region == edges[e0].region) ++e1;
+        const int r = edges[e0].region;
+        std::vector<Vec2> best;
+        Real bestArea = 0;
+        for (std::size_t s = e0; s < e1; ++s) {
+            if (used[s]) continue;
+            std::vector<Vec2> loop;
+            std::size_t cur = s;
+            int guard = static_cast<int>(e1 - e0) + 2;
+            while (!used[cur] && guard-- > 0) {
+                used[cur] = 1;
+                const int from = edges[cur].from;
+                loop.push_back({std::min(W, (from % cx) * cell), std::min(H, (from / cx) * cell)});
+                const int to = edges[cur].to;
+                // Next unused edge starting at `to`.
+                auto it = std::lower_bound(edges.begin() + e0, edges.begin() + e1, to,
+                                           [](const Edge& e, int v) { return e.from < v; });
+                std::size_t nxt = cur;
+                for (; it != edges.begin() + e1 && it->from == to; ++it) {
+                    const std::size_t k = static_cast<std::size_t>(it - edges.begin());
+                    if (!used[k]) { nxt = k; break; }
+                }
+                if (nxt == cur) break;
+                cur = nxt;
+            }
+            const Real a = std::fabs(polygonArea(loop));
+            if (a > bestArea) { bestArea = a; best.swap(loop); }
+        }
+        e0 = e1;
+        if (best.size() < 3 || static_cast<int>(frags_.size()) >= maxFragments) continue;
+        Fragment f;
+        f.ply = ply;
+        f.thickness = thickness;
+        f.outline = simplifyClosed(best, 0.75 * cell);
+        f.origin = {0, 0};
+        finishFragment(f, density);
+        f.pos = {f.origin.x, f.origin.y, zMid};
+        f.edgeContact = edgeLen[r];
+        f.edges = edgeMask[r];
+        f.bornAt = time;
+        f.id = nextId_++;
+        regionIndex[r] = static_cast<int>(frags_.size());
+        frags_.push_back(std::move(f));
+        ++added;
+    }
+    // 6. The cell map now points at the new pieces.
+    for (std::size_t c = 0; c < N; ++c) {
+        const int r = lab[c];
+        if (r < 0) { pm.label[c] = -1; continue; }
+        if (isNew[r]) pm.label[c] = regionIndex[r];
+    }
+    if (added) ++revision;
+    return added;
+}
+
+int FragmentSystem::fragmentAt(int ply, Vec2 p) const {
+    if (ply < 0 || ply >= static_cast<int>(maps.size())) return -1;
+    const PlyMap& m = maps[ply];
+    if (m.label.empty()) return -1;
+    const int i = static_cast<int>(std::floor(p.x / m.cell)), j = static_cast<int>(std::floor(p.y / m.cell));
+    if (i < 0 || j < 0 || i >= m.nx || j >= m.ny) return -1;
+    return m.label[static_cast<std::size_t>(j) * m.nx + i];
+}
+
+int FragmentSystem::addChip(int ply, Vec2 at, Real z, Real size, Real thickness, Real density, const Vec3& vel,
+                            Real time, Rng& rng) {
+    if (static_cast<int>(frags_.size()) >= maxFragments) return -1;
+    Fragment f;
+    f.ply = ply;
+    f.thickness = thickness;
+    f.chip = true;
+    const int k = 5 + static_cast<int>(rng.uniform() * 3);
+    Real a0 = rng.uniform(0, 2 * kPi);
+    for (int i = 0; i < k; ++i) {
+        const Real a = a0 + 2 * kPi * i / k + rng.uniform(-0.3, 0.3) * kPi / k;
+        f.outline.push_back(Vec2{std::cos(a), std::sin(a)} * (size * rng.uniform(0.45, 1.0)));
+    }
+    f.origin = at;
+    finishFragment(f, density);
+    f.pos = {f.origin.x, f.origin.y, z};
+    f.vel = vel;
+    f.omega = {rng.uniform(-60, 60), rng.uniform(-60, 60), rng.uniform(-30, 30)};
+    f.state = FragmentState::Free;
+    f.bornAt = time;
+    f.id = nextId_++;
+    frags_.push_back(std::move(f));
+    ++revision;
+    return static_cast<int>(frags_.size() - 1);
+}
+
+void FragmentSystem::split(std::size_t k, Rng& rng, Real time) {
+    if (static_cast<int>(frags_.size()) + 2 > maxFragments) return;
+    Fragment parent = frags_[k];
+    const Real ang = rng.uniform(0, kPi);
+    const Vec2 n{std::cos(ang), std::sin(ang)};
+    const Vec2 shift = perp(n) * rng.uniform(-0.25, 0.25) * parent.radius;
+    std::vector<Vec2> local;
+    local.reserve(parent.outline.size());
+    for (const auto& p : parent.outline) local.push_back(p - shift);
+    std::vector<Vec2> halves[2] = {clipHalf(local, n), clipHalf(local, -n)};
+    for (auto& h : halves)
+        if (h.size() < 3 || std::fabs(polygonArea(h)) < 1e-7) return;
+    frags_[k].retired = true;
+    frags_[k].outline.clear();
+    const Real density = parent.mass / std::max(1e-12, parent.area * parent.thickness);
+    for (int s = 0; s < 2; ++s) {
+        Fragment f = parent;
+        f.outline = halves[s];
+        for (auto& p : f.outline) p += shift;
+        f.origin = {0, 0};
+        finishFragment(f, density);
+        const Vec3 off = parent.rot.rotate({f.origin.x, f.origin.y, 0});
+        f.pos = parent.pos + off;
+        const Vec3 sep = parent.rot.rotate({(s ? -n.x : n.x) * 0.3, (s ? -n.y : n.y) * 0.3, 0});
+        f.vel = parent.vel + cross(parent.omega, off) + sep + Vec3{0, 0.4, 0};
+        f.omega = parent.omega + Vec3{rng.uniform(-8, 8), rng.uniform(-8, 8), rng.uniform(-8, 8)};
+        f.generation = parent.generation + 1;
+        f.state = FragmentState::Free;
+        f.retired = false;
+        f.bornAt = time;
+        f.id = nextId_++;
+        frags_.push_back(std::move(f));
+    }
+    ++revision;
+}
+
+void FragmentSystem::step(Real dt, Real time, Rng& rng) {
+    std::vector<std::size_t> toSplit;
+    const std::size_t n = frags_.size();
+    const Real spinDecay = std::exp(-0.4 * dt);
+    for (std::size_t k = 0; k < n; ++k) {
+        Fragment& f = frags_[k];
+        if (f.retired) continue;
+        if (f.state == FragmentState::Pending && time >= f.releaseTime) f.state = FragmentState::Free;
+        if (f.state != FragmentState::Free) continue;
+        // Gravity and quadratic air drag on the mean tumbling area.
+        const Real sp = length(f.vel);
+        const Vec3 drag = f.vel * (-0.5 * kAirDensity * 1.2 * 0.5 * f.area * sp);
+        f.vel += (Vec3{0, -kGravity, 0} + drag / f.mass) * dt;
+        f.omega *= spinDecay;
+        f.pos += f.vel * dt;
+        f.rot.integrate(f.omega, dt);
+        // Floor: the lowest corner of the slab (only near the floor).
+        if (f.pos.y - f.radius - f.thickness > floorY) continue;
+        Real minY = 1e9;
+        Vec3 low;
+        for (const auto& p : f.outline) {
+            for (const Real zz : {-0.5 * f.thickness, 0.5 * f.thickness}) {
+                const Vec3 w = f.pos + f.rot.rotate({p.x, p.y, zz});
+                if (w.y < minY) { minY = w.y; low = w; }
+            }
+        }
+        if (minY >= floorY) continue;
+        f.pos.y += floorY - minY;
+        low.y = floorY;
+        const Vec3 r = low - f.pos;
+        const Vec3 nrm{0, 1, 0};
+        const Vec3 vc = f.vel + cross(f.omega, r);
+        const Real vn = dot(vc, nrm);
+        if (vn < 0) {
+            const Vec3 rn = cross(r, nrm);
+            const Real kn = 1 / f.mass + dot(cross(bodyInverse(f.rot, f.inertia, rn), r), nrm);
+            const Real jn = -(1 + restitution) * vn / kn;
+            Vec3 J = nrm * jn;
+            Vec3 vt = vc - nrm * vn;
+            const Real vtl = length(vt);
+            if (vtl > 1e-6) {
+                const Vec3 t = vt / vtl;
+                const Real kt = 1 / f.mass + dot(cross(bodyInverse(f.rot, f.inertia, cross(r, t)), r), t);
+                const Real jt = std::max(-friction * jn, -vtl / kt);
+                J += t * jt;
+            }
+            f.vel += J / f.mass;
+            f.omega += bodyInverse(f.rot, f.inertia, cross(r, J));
+            // Hard landings break the piece (energy against new crack surface).
+            const Real cut = 2 * std::sqrt(f.area / kPi);
+            if (0.5 * f.mass * vn * vn > breakEnergyFactor * toughnessEnergy * f.thickness * cut && f.generation < 3 &&
+                f.radius > 0.004)
+                toSplit.push_back(k);
+        }
+        // Settled: a few slow contacts in a row put it to sleep.
+        f.calm = (length(f.vel) < 0.12 && length(f.omega) < 3) ? f.calm + 1 : 0;
+        if (f.calm > 6) {
+            f.vel = {};
+            f.omega = {};
+            f.state = FragmentState::Resting;
+        }
+    }
+    for (const auto k : toSplit) split(k, rng, time);
+}
+
+}  // namespace gls

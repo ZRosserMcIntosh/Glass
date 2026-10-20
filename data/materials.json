@@ -1,0 +1,150 @@
+{
+  "comment": "Glass Dynamics materials. Units are in the field names. Interlayer and polymer moduli are the secant values at impact strain rates (1e2-1e3 /s), not the long-term values used for wind or snow loads.",
+  "materials": [
+    {
+      "id": "soda_lime_float",
+      "name": "Soda-lime-silica float glass",
+      "kind": "glass",
+      "density_kgm3": 2500,
+      "youngs_GPa": 72,
+      "poisson": 0.22,
+      "toughness_MPam": 0.75,
+      "hardness_GPa": 5.5,
+      "branching_MPam": 2.1,
+      "crack_speed_ms": 1520,
+      "weibull_modulus": 7,
+      "weibull_scale_MPa": 70,
+      "edge_factor": 0.8,
+      "corrosion_n": 16,
+      "comminution_MJm3": 40,
+      "cone_angle_deg": 68,
+      "provenance": {
+        "density_kgm3": "published: EN 572-1:2012, 2500 kg/m3",
+        "youngs_GPa": "published: ASTM E1300-16, 71.7 GPa (EN 572-1 gives 70)",
+        "poisson": "published: ASTM E1300-16, 0.22",
+        "toughness_MPam": "published: Wiederhorn, J. Am. Ceram. Soc. 52 (1969) 99, K_Ic 0.75-0.82 MPa m^0.5",
+        "hardness_GPa": "published: Vickers hardness of soda-lime glass, 5.4-5.6 GPa (Lawn, Fracture of Brittle Solids, 2nd ed.)",
+        "branching_MPam": "published: crack-branching constant A_b, sigma r_b^0.5 = 2.1 MPa m^0.5 (Mecholsky, Rice & Freiman 1974; Quinn, NIST SP 960-17)",
+        "crack_speed_ms": "published: terminal crack velocity in soda-lime glass, ~1500 m/s (Schardin 1959; Doll 1975)",
+        "weibull_modulus": "published: as-received float glass surfaces, m = 6-8 (Haldimann, Luible & Overend, Structural Use of Glass, 2008)",
+        "weibull_scale_MPa": "estimated: characteristic strength of an as-received surface over 1 m^2 under a 60 s load, consistent with EN 16612 f_g,k = 45 MPa at the 5 % fractile",
+        "edge_factor": "published: EN 16612:2019 edge-strength factor k_e = 0.8 for cut edges",
+        "corrosion_n": "published: stress-corrosion exponent n = 16 in humid air (Wiederhorn & Bolz 1970; ASTM E1300 load-duration factor)",
+        "comminution_MJm3": "calibrated: energy absorbed crushing the ballistic cone, fitted so the UL 752 representative laminates stop their rated rounds (tests/test_ballistic.cpp)",
+        "cone_angle_deg": "published: Hertzian / ballistic cone half-angle ~68 deg from the load axis in soda-lime glass (Frank & Lawn 1967; Florence 1969 uses 63-68 deg)"
+      }
+    },
+    {
+      "id": "aluminosilicate",
+      "name": "Alkali-aluminosilicate glass (ion-exchangeable)",
+      "kind": "glass",
+      "density_kgm3": 2420,
+      "youngs_GPa": 71.5,
+      "poisson": 0.21,
+      "toughness_MPam": 0.7,
+      "hardness_GPa": 5.9,
+      "branching_MPam": 2.0,
+      "crack_speed_ms": 1550,
+      "weibull_modulus": 8,
+      "weibull_scale_MPa": 85,
+      "edge_factor": 0.8,
+      "corrosion_n": 20,
+      "comminution_MJm3": 45,
+      "cone_angle_deg": 68,
+      "provenance": {
+        "density_kgm3": "published: alkali-aluminosilicate cover / aerospace glass data sheets, 2.39-2.45 g/cm3",
+        "youngs_GPa": "published: 69-77 GPa for alkali-aluminosilicate glasses (manufacturer data sheets)",
+        "poisson": "published: 0.21-0.22 (manufacturer data sheets)",
+        "toughness_MPam": "published: 0.67-0.71 MPa m^0.5 for the unexchanged glass (manufacturer data sheets)",
+        "hardness_GPa": "published: Vickers 5.5-6.5 GPa (manufacturer data sheets, before ion exchange)",
+        "branching_MPam": "estimated: taken close to soda-lime (fractography of aluminosilicates gives 1.9-2.2)",
+        "crack_speed_ms": "estimated: terminal velocity scales with sqrt(E/rho), slightly above soda-lime",
+        "weibull_modulus": "estimated: fusion-drawn surfaces are more uniform than float surfaces",
+        "weibull_scale_MPa": "estimated: as-drawn surface, 1 m^2, 60 s",
+        "edge_factor": "estimated: same cut-edge factor as float glass",
+        "corrosion_n": "estimated: aluminosilicates are less sensitive to stress corrosion than soda-lime",
+        "comminution_MJm3": "estimated: scaled from soda-lime by hardness",
+        "cone_angle_deg": "estimated: same as soda-lime"
+      }
+    },
+    {
+      "id": "pvb",
+      "name": "PVB interlayer",
+      "kind": "interlayer",
+      "density_kgm3": 1070,
+      "youngs_GPa": 0.25,
+      "poisson": 0.45,
+      "shear_MPa": 20,
+      "tensile_MPa": 32,
+      "flow_MPa": 20,
+      "failure_strain": 2.0,
+      "provenance": {
+        "density_kgm3": "published: PVB interlayer data sheets, 1.07 g/cm3",
+        "youngs_GPa": "published: initial modulus of PVB at strain rates 1e2-1e3 /s, 0.1-0.4 GPa (Iwasaki et al. 2007; Morison 2007)",
+        "shear_MPa": "estimated: PVB shear modulus at 20 C for millisecond loads from published Prony series, 10-50 MPa",
+        "tensile_MPa": "published: tensile strength at high strain rate, ~30-35 MPa (Liu et al. 2012)",
+        "flow_MPa": "published: high-rate yield / plateau stress of PVB, 15-25 MPa (Liu et al. 2012)",
+        "failure_strain": "published: elongation at break at high rate, 150-250 % (Iwasaki et al. 2007)"
+      }
+    },
+    {
+      "id": "ionoplast",
+      "name": "Ionoplast interlayer (stiff, structural)",
+      "kind": "interlayer",
+      "density_kgm3": 950,
+      "youngs_GPa": 0.6,
+      "poisson": 0.45,
+      "shear_MPa": 120,
+      "tensile_MPa": 38,
+      "flow_MPa": 28,
+      "failure_strain": 3.0,
+      "provenance": {
+        "density_kgm3": "published: ionoplast interlayer data sheets, 0.95 g/cm3",
+        "youngs_GPa": "published: 0.3-0.9 GPa at room temperature (manufacturer data sheet)",
+        "shear_MPa": "published: ~100+ MPa shear relaxation modulus at 20 C, 1 s (manufacturer data sheet)",
+        "tensile_MPa": "published: 34.5 MPa tensile strength (manufacturer data sheet)",
+        "flow_MPa": "estimated: high-rate yield stress",
+        "failure_strain": "published: elongation at break ~400 % quasi-static; lower at impact rates (estimated 300 %)"
+      }
+    },
+    {
+      "id": "tpu",
+      "name": "Aliphatic polyurethane interlayer",
+      "kind": "interlayer",
+      "density_kgm3": 1110,
+      "youngs_GPa": 0.08,
+      "poisson": 0.48,
+      "shear_MPa": 6,
+      "tensile_MPa": 40,
+      "flow_MPa": 12,
+      "failure_strain": 4.0,
+      "provenance": {
+        "density_kgm3": "published: aliphatic TPU film data sheets, 1.1 g/cm3",
+        "youngs_GPa": "estimated: secant modulus at impact rates",
+        "shear_MPa": "estimated: soft at room temperature; why polycarbonate-faced and aircraft laminates use it",
+        "tensile_MPa": "published: 35-50 MPa (TPU film data sheets)",
+        "flow_MPa": "estimated",
+        "failure_strain": "published: elongation at break 400-500 % (TPU film data sheets)"
+      }
+    },
+    {
+      "id": "polycarbonate",
+      "name": "Polycarbonate sheet",
+      "kind": "polymer",
+      "density_kgm3": 1200,
+      "youngs_GPa": 2.35,
+      "poisson": 0.37,
+      "tensile_MPa": 70,
+      "flow_MPa": 65,
+      "failure_strain": 0.9,
+      "provenance": {
+        "density_kgm3": "published: 1.20 g/cm3 (polycarbonate sheet data sheets)",
+        "youngs_GPa": "published: 2.3-2.4 GPa (polycarbonate sheet data sheets)",
+        "poisson": "published: 0.37",
+        "tensile_MPa": "published: 65-70 MPa at yield, higher at impact rates",
+        "flow_MPa": "published: yield ~62-65 MPa quasi-static (raised slightly for rate)",
+        "failure_strain": "estimated: 110-150 % quasi-static, reduced for impact rates"
+      }
+    }
+  ]
+}

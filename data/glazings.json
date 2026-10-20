@@ -1,0 +1,230 @@
+{
+  "comment": "Glass Dynamics glazing layups. Plies are listed from the front (struck) face. Panes are flat and simply supported in their frame; curved windscreens are treated as flat panes of the same area.",
+  "glazings": [
+    {
+      "id": "annealed_6",
+      "name": "Annealed float, 6 mm",
+      "category": "architectural",
+      "description": "Plain window and shop-front glass. Breaks into long, sharp shards.",
+      "standard": "EN 572-2 / ASTM C1036",
+      "width_m": 1.2,
+      "height_m": 1.0,
+      "damping": 0.01,
+      "frame_grip_Nm": 60,
+      "plies": [{ "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" }],
+      "provenance": {
+        "damping": "published: monolithic glass panes in frames, 0.5-2 % modal damping",
+        "frame_grip_Nm": "estimated: gasket and bead friction holding a loose shard by its edge"
+      }
+    },
+    {
+      "id": "annealed_4",
+      "name": "Annealed float, 4 mm",
+      "category": "architectural",
+      "description": "Thin domestic window glass.",
+      "standard": "EN 572-2 / ASTM C1036",
+      "width_m": 0.9,
+      "height_m": 0.8,
+      "damping": 0.01,
+      "frame_grip_Nm": 50,
+      "plies": [{ "material": "soda_lime_float", "thickness_mm": 4, "treatment": "annealed" }],
+      "provenance": {
+        "damping": "published: monolithic glass panes in frames, 0.5-2 % modal damping",
+        "frame_grip_Nm": "estimated"
+      }
+    },
+    {
+      "id": "heat_strengthened_6",
+      "name": "Heat-strengthened, 6 mm",
+      "category": "architectural",
+      "description": "Twice the strength of annealed glass; breaks into large pieces that tend to stay in the frame.",
+      "standard": "EN 1863 / ASTM C1048 (surface compression 24-52 MPa)",
+      "width_m": 1.2,
+      "height_m": 1.0,
+      "damping": 0.01,
+      "frame_grip_Nm": 60,
+      "plies": [{ "material": "soda_lime_float", "thickness_mm": 6, "treatment": "heat_strengthened", "surface_compression_MPa": 40 }],
+      "provenance": {
+        "plies": "published: ASTM C1048 heat-strengthened surface compression 24-52 MPa; 40 MPa taken"
+      }
+    },
+    {
+      "id": "tempered_6",
+      "name": "Fully tempered, 6 mm",
+      "category": "architectural",
+      "description": "Safety glass for doors and showers. Four to five times stronger; breaks into small dice.",
+      "standard": "EN 12150-1 / ASTM C1048 (surface compression >= 69 MPa) / ANSI Z97.1",
+      "width_m": 0.9,
+      "height_m": 1.2,
+      "damping": 0.01,
+      "frame_grip_Nm": 40,
+      "plies": [{ "material": "soda_lime_float", "thickness_mm": 6, "treatment": "fully_tempered", "surface_compression_MPa": 100 }],
+      "provenance": {
+        "plies": "published: fully tempered surface compression 69-150 MPa (ASTM C1048); typical production ~100 MPa"
+      }
+    },
+    {
+      "id": "car_side_tempered",
+      "name": "Car side window, tempered 4 mm",
+      "category": "automotive",
+      "description": "Door glass: tempered so it crumbles into blunt dice. A spring-loaded window punch breaks it.",
+      "standard": "UN ECE R43 (40-400 fragments in any 50 x 50 mm square)",
+      "width_m": 0.75,
+      "height_m": 0.45,
+      "damping": 0.012,
+      "frame_grip_Nm": 30,
+      "plies": [{ "material": "soda_lime_float", "thickness_mm": 4, "treatment": "fully_tempered", "surface_compression_MPa": 120 }],
+      "provenance": {
+        "plies": "estimated: automotive door glass is tempered harder than architectural, ~110-130 MPa surface compression",
+        "width_m": "estimated: a typical front door drop glass, flattened"
+      }
+    },
+    {
+      "id": "windscreen",
+      "name": "Car windscreen, laminated 2.1 / 0.76 PVB / 2.1",
+      "category": "automotive",
+      "description": "Two annealed plies bonded by PVB: cracks in a spider web but holds together and stops the occupant.",
+      "standard": "UN ECE R43 / ANSI Z26.1 AS1 (2.26 kg ball from 4 m must not pass)",
+      "width_m": 1.45,
+      "height_m": 0.85,
+      "damping": 0.04,
+      "frame_grip_Nm": 200,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 2.1, "treatment": "annealed" },
+        { "material": "pvb", "thickness_mm": 0.76 },
+        { "material": "soda_lime_float", "thickness_mm": 2.1, "treatment": "annealed" }
+      ],
+      "provenance": {
+        "plies": "published: the common passenger-car windscreen layup",
+        "damping": "estimated: PVB interlayer raises modal damping to several percent",
+        "width_m": "estimated: a mid-size windscreen, flattened"
+      }
+    },
+    {
+      "id": "laminated_6_38",
+      "name": "Laminated safety glass 3 / 0.38 PVB / 3",
+      "category": "architectural",
+      "description": "Two thin annealed plies with a PVB interlayer: the shards stay stuck to the film.",
+      "standard": "EN 14449 / EN 12600",
+      "width_m": 1.2,
+      "height_m": 1.0,
+      "damping": 0.04,
+      "frame_grip_Nm": 200,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 3, "treatment": "annealed" },
+        { "material": "pvb", "thickness_mm": 0.38 },
+        { "material": "soda_lime_float", "thickness_mm": 3, "treatment": "annealed" }
+      ],
+      "provenance": { "plies": "published: standard 6.38 mm laminated safety glass" }
+    },
+    {
+      "id": "hurricane",
+      "name": "Hurricane laminate 6 HS / 2.28 ionoplast / 6 HS",
+      "category": "architectural",
+      "description": "Stiff structural interlayer between heat-strengthened plies, for windborne debris.",
+      "standard": "ASTM E1996 large missile D (4.1 kg 2x4 at 15.2 m/s)",
+      "width_m": 1.2,
+      "height_m": 1.2,
+      "damping": 0.03,
+      "frame_grip_Nm": 400,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "heat_strengthened", "surface_compression_MPa": 40 },
+        { "material": "ionoplast", "thickness_mm": 2.28 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "heat_strengthened", "surface_compression_MPa": 40 }
+      ],
+      "provenance": { "plies": "estimated: a representative large-missile layup" }
+    },
+    {
+      "id": "ul752_l1",
+      "name": "Bullet-resistant laminate, 30 mm (UL 752 Level 1 class)",
+      "category": "security",
+      "description": "Five annealed plies and PVB. Stops 9 mm; the back ply may spall.",
+      "standard": "UL 752 Level 1 (9 mm FMJ, 358-394 m/s, 3 shots)",
+      "width_m": 0.6,
+      "height_m": 0.6,
+      "damping": 0.05,
+      "frame_grip_Nm": 600,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 5, "treatment": "annealed" },
+        { "material": "pvb", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 5, "treatment": "annealed" },
+        { "material": "pvb", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 5, "treatment": "annealed" },
+        { "material": "pvb", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 5, "treatment": "annealed" },
+        { "material": "pvb", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 5, "treatment": "annealed" }
+      ],
+      "provenance": { "plies": "estimated: representative of 1.2 in all-glass Level 1 products; not a certified product" }
+    },
+    {
+      "id": "ul752_l3",
+      "name": "Glass-clad polycarbonate, 32 mm (UL 752 Level 3 class)",
+      "category": "security",
+      "description": "Glass faces crush the bullet; a polycarbonate back catches it with no spall.",
+      "standard": "UL 752 Level 3 (.44 Magnum, 411-453 m/s, 3 shots)",
+      "width_m": 0.6,
+      "height_m": 0.6,
+      "damping": 0.05,
+      "frame_grip_Nm": 600,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "polycarbonate", "thickness_mm": 9.5 }
+      ],
+      "provenance": { "plies": "estimated: representative glass-clad polycarbonate Level 3 build-up; not a certified product" }
+    },
+    {
+      "id": "ul752_l8",
+      "name": "Rifle-rated glass-clad polycarbonate, 52 mm (UL 752 Level 8 class)",
+      "category": "security",
+      "description": "Five thick glass plies over polycarbonate, for 7.62 mm rifle fire.",
+      "standard": "UL 752 Level 8 (7.62 mm NATO ball, 838-922 m/s, 5 shots)",
+      "width_m": 0.6,
+      "height_m": 0.6,
+      "damping": 0.05,
+      "frame_grip_Nm": 800,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 8, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 8, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 8, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 8, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 8, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "polycarbonate", "thickness_mm": 6 }
+      ],
+      "provenance": { "plies": "estimated: representative rifle-rated build-up; not a certified product" }
+    },
+    {
+      "id": "aircraft_windshield",
+      "name": "Transport aircraft windshield (chemically strengthened, 3 plies)",
+      "category": "aviation",
+      "description": "A thin outer ply over two ion-exchanged structural plies with urethane between, pressurised from inside. Either structural ply alone carries the cabin pressure (fail-safe).",
+      "standard": "14 CFR 25.775 (1.8 kg bird at V_C without penetration)",
+      "width_m": 0.85,
+      "height_m": 0.6,
+      "damping": 0.05,
+      "pressure_kPa": -59.3,
+      "frame_grip_Nm": 2000,
+      "plies": [
+        { "material": "aluminosilicate", "thickness_mm": 3, "treatment": "chemical", "surface_compression_MPa": 400, "layer_depth_um": 250 },
+        { "material": "tpu", "thickness_mm": 6 },
+        { "material": "aluminosilicate", "thickness_mm": 8, "treatment": "chemical", "surface_compression_MPa": 350, "layer_depth_um": 350 },
+        { "material": "tpu", "thickness_mm": 1.5 },
+        { "material": "aluminosilicate", "thickness_mm": 8, "treatment": "chemical", "surface_compression_MPa": 350, "layer_depth_um": 350 }
+      ],
+      "provenance": {
+        "plies": "estimated: representative of published transport-category windshield construction (outer abrasion ply, heated urethane, two structural ion-exchanged plies); not a specific type",
+        "pressure_kPa": "published: 8.6 psi maximum cabin differential of current transport jets (negative: pushes outward, toward the struck face)"
+      }
+    }
+  ]
+}
