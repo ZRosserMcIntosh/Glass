@@ -353,6 +353,74 @@ TEST_CASE("tiers: every tier gives the same outcome for the same shot") {
     }
 }
 
+// ---- Armoured glazing under fire --------------------------------------------------------
+
+namespace {
+// One 9 mm round into a pane at `at`, travelling `pitch` radians off square
+// (up the glass), run until it is done.
+const ImpactReport& smgRound(Pane& p, Vec2 at, double pitch, double t) {
+    const auto& lib = glstest::library();
+    const ImpactorDef& b = *lib.impactor("smg_9mm");
+    p.advance(t);
+    const int k = p.fire(b, at, b.speed, 0, pitch, false, 0.3);
+    p.advance(t + 0.01);
+    return p.impactors()[k].report;
+}
+}  // namespace
+
+TEST_CASE("ballistics: an oblique round meets the armour's slant thickness, a grazing one glances off") {
+    const auto& lib = glstest::library();
+    const GlazingDef& g = *lib.glazing("armoured_windscreen");
+    Pane square(g, budgetForTier(1), 1), raked(g, budgetForTier(1), 1), grazing(g, budgetForTier(1), 1);
+    const Vec2 c{0.5 * g.width, 0.5 * g.height};
+    const ImpactReport a = smgRound(square, c, 0, 0.01);
+    const ImpactReport b = smgRound(raked, c, deg(55), 0.01);
+    const ImpactReport r = smgRound(grazing, c, deg(78), 0.01);
+    std::cout << "    square " << a.depth * 1e3 << " mm deep, at 55 degrees " << b.depth * 1e3 << " mm\n";
+    CHECK(a.embedded && b.embedded);
+    // The same path through glass reaches less far through the pane.
+    CHECK(b.depth < 0.8 * a.depth);
+    CHECK(r.rebounded && !r.embedded && !r.penetrated);
+    CHECK(r.outcome.find("Ricochet") != std::string::npos);
+    CHECK(!grazing.crushes().empty());
+}
+
+TEST_CASE("ballistics: a round into an earlier crater goes deeper") {
+    const auto& lib = glstest::library();
+    Pane p(*lib.glazing("armoured_windscreen"), budgetForTier(1), 2);
+    const Vec2 c{0.6, 0.2};
+    const double d1 = smgRound(p, c, 0, 0.01).depth;
+    const double d2 = smgRound(p, c, 0, 0.05).depth;
+    const double d3 = smgRound(p, {0.95, 0.2}, 0, 0.09).depth;  // fresh glass again
+    std::cout << "    first " << d1 * 1e3 << " mm, into its crater " << d2 * 1e3 << " mm, fresh glass " << d3 * 1e3 << " mm\n";
+    CHECK(d2 > 1.3 * d1);
+    CHECK(d3 < 1.2 * d1);
+}
+
+TEST_CASE("armoured windscreen: a submachine-gun barrage does not get through, but the driver's view goes") {
+    const auto& lib = glstest::library();
+    const GlazingDef& g = *lib.glazing("armoured_windscreen");
+    Pane p(g, budgetForTier(1), 3);
+    Rng rng(42);
+    const int rounds = glstest::kOptimisedBuild ? 80 : 16;
+    int through = 0, hits = 0;
+    double t = 0.02;
+    for (int k = 0; k < rounds; ++k) {
+        t += (k % 6 == 5) ? 0.3 : 0.075;
+        const Vec2 at{0.4 * g.width + 0.15 * rng.normal(), 0.5 * g.height + 0.08 * rng.normal()};
+        if (at.x < 0.02 || at.y < 0.02 || at.x > g.width - 0.02 || at.y > g.height - 0.02) continue;
+        const ImpactReport& r = smgRound(p, at, deg(50) + rng.uniform(-0.1, 0.1), t);
+        ++hits;
+        through += r.penetrated ? 1 : 0;
+    }
+    const PaneStatus st = p.status();
+    std::cout << "    " << hits << " rounds on the glass, " << through << " through, visibility " << st.visibility << "\n";
+    CHECK(through == 0);
+    CHECK(st.barrierIntact);
+    CHECK(static_cast<int>(p.crushes().size()) >= hits);
+    CHECK(st.visibility < (glstest::kOptimisedBuild ? 0.85 : 0.97));
+}
+
 // ---- Host coupling ------------------------------------------------------------------
 
 TEST_CASE("bridge: a windscreen's inward normal points into the car") {

@@ -33,7 +33,7 @@ struct Sim {
     std::string text;
     std::vector<double> state, imps, plies, report;
     std::vector<float> cracks, frags, poses, field;
-    std::vector<float> sprays;
+    std::vector<float> sprays, crushes;
 };
 
 Sim* g = nullptr;
@@ -274,6 +274,7 @@ GLS_EXPORT double* gls_state() {
     int held = 0;
     for (const auto& sh : P.sheets()) held += sh.remaining();
     s[25] = held;
+    s[26] = static_cast<double>(P.crushes().size());
     return s;
 }
 
@@ -420,6 +421,25 @@ GLS_EXPORT float* gls_sprays(int from) {
     }
     S.sprays[0] = static_cast<float>(sp.size() > a ? sp.size() - a : 0);
     return S.sprays.data();
+}
+
+// Crushed discs from index `from`: comminuted glass, white to the eye.
+// [count, then 6 float32 each: glass ply, x, y, radius, time, kind (0 contact
+// damage or cone, 1 projectile)].
+GLS_EXPORT float* gls_crushes(int from) {
+    Sim& S = sim();
+    S.crushes.assign(1, 0);
+    if (!S.pane) return S.crushes.data();
+    const auto& cr = S.pane->crushes();
+    const std::size_t a = static_cast<std::size_t>(std::max(0, from));
+    for (std::size_t i = a; i < cr.size(); ++i) {
+        const CrushMark& c = cr[i];
+        const float v[6] = {static_cast<float>(c.ply), static_cast<float>(c.c.x), static_cast<float>(c.c.y),
+                            static_cast<float>(c.r), static_cast<float>(c.time), static_cast<float>(c.kind)};
+        S.crushes.insert(S.crushes.end(), v, v + 6);
+    }
+    S.crushes[0] = static_cast<float>(cr.size() > a ? cr.size() - a : 0);
+    return S.crushes.data();
 }
 
 // Deflection (m) and the front / back largest principal stress (Pa) of glass

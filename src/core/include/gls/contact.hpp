@@ -125,6 +125,7 @@ struct BallisticLayer {
     Real z0 = 0, z1 = 0;
     MaterialKind kind = MaterialKind::Glass;
     const Material* mat = nullptr;
+    Real rubble = 0;  // m, radius about the path already crushed by earlier hits
 };
 
 class Ballistic {

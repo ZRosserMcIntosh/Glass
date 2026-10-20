@@ -93,6 +93,7 @@ struct Impactor {
     Real coneStrength = 0;
     bool cone = false;
     Real coneDepth = 0;               // m, contact damage (cone / median crack) under the struck face
+    Real losCos = 1;                  // projectile: cosine of the obliquity (layers count 1 / losCos thick)
     std::size_t ballisticEventsSeen = 0;
 };
 
@@ -105,6 +106,15 @@ struct Star {
     Real reach = 0, lastRing = 0, born = 0, nextStrength = 0;
     int rings = 0;
     std::uint32_t group = 0;
+};
+
+// A crushed (comminuted) disc of one glass ply: white and opaque to the eye.
+struct CrushMark {
+    int ply = 0;     // glass ply index
+    Vec2 c;
+    Real r = 0;
+    Real time = 0;
+    int kind = 0;    // 0 contact damage or cone, 1 projectile
 };
 
 struct Probe {
@@ -126,6 +136,7 @@ struct GlassPly {
     CrackNetwork net;
     std::vector<Probe> probes;
     int probeNx = 0, probeNy = 0;
+    Real probeMin[2] = {-1, -1};  // weakest unfired probe per face (-1: recount)
     std::uint64_t builtRevision = 0;
     bool fragmented = false;
     Vec2 origin;           // first fracture origin
@@ -139,7 +150,7 @@ struct PaneStatus {
     bool barrierIntact = true;      // still separates the two sides (pressure, wind)
     Real openArea = 0;              // m^2 of missing glazing
     Real crackedFraction = 0;       // of the area, behind cracks
-    Real visibility = 1;            // 1 clear .. 0 opaque (crack density)
+    Real visibility = 1;            // 1 clear .. 0 opaque: open area, less crushed glass, hazed by crack density
     Real maxBulge = 0;              // m, out-of-plane permanent deformation
     int fragments = 0;              // free pieces
 };
@@ -175,6 +186,7 @@ public:
     const std::vector<Impactor>& impactors() const { return imp_; }
     const std::vector<Star>& stars() const { return stars_; }
     const std::vector<CrazedSheet>& sheets() const { return sheets_; }
+    const std::vector<CrushMark>& crushes() const { return crushes_; }
 
     // Bending plus residual stress on a face of glass ply `g` (index into glass()).
     PlaneStress stress(int g, bool backFace, Vec2 p) const;
@@ -207,6 +219,7 @@ private:
     void breakAtLoad(int k, int g, Real sigma, Real strength, int radials);
     void startRadials(int g, Vec2 c, Real r0, int n, std::uint32_t group, CrackKind kind, Real speed);
     void startMembrane(int k);
+    void crush(int g, Vec2 c, Real r, std::uint32_t group, int kind);
     void passThrough(int k, Real massShare);
     void ballisticEvents(int k);
     void growCracks(Real dt);
@@ -235,6 +248,7 @@ private:
     std::vector<Impactor> imp_;
     std::vector<Star> stars_;
     std::vector<CrazedSheet> sheets_;  // shattered tempered plies coming down
+    std::vector<CrushMark> crushes_;
     std::vector<std::string> events_;
     Rng rng_;
     Real time_ = 0, lastDt_ = 0, lastProbe_ = -1, lastDynamic_ = -1e9, lastLoaded_ = -1e9;
@@ -243,7 +257,8 @@ private:
     Real fragTime_ = 0;  // pieces step at their own fixed rate
     std::vector<Curvature> kGrid_;
     int kNx_ = 0, kNy_ = 0;
-    Real kGridTime_ = -1;
+    Real kGridTime_ = -1, kGridBound_ = 0, kCheckedAt_ = -1;
+    bool kDue_ = false;
     struct Bulge {
         Vec2 c;
         Real rim = 0, outer = 0, depth = 0;

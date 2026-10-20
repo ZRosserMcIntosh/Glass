@@ -482,8 +482,8 @@ void Pane::stepImpactor(int k, Real dt) {
             I.force = F;
             I.contactRadius = I.ballistic.columnRadius();
             I.report.peakForce = std::max(I.report.peakForce, F);
-            plate_.addPatch(I.hit.x, I.hit.y, std::max(I.contactRadius, 1e-3), I.side * F);
-            const Real depth = I.ballistic.depth();
+            plate_.addPatch(I.hit.x, I.hit.y, std::max(I.contactRadius, 1e-3), I.side * F * I.losCos);
+            const Real depth = I.ballistic.depth() * I.losCos;  // along the path -> through the pane
             const Real noseZ = (I.side > 0 ? depth : T - depth) + plate_.deflection(I.hit);
             I.pos.z = noseZ - I.side * I.nose;
             I.vel = I.axis * I.ballistic.speed();
@@ -654,6 +654,7 @@ void Pane::beginContact(int k) {
     contactStepFor(I);
     const Material& g0 = *(I.side > 0 ? glass_.front() : glass_.back()).mat;
     I.coneStrength = rng_.weibull(g0.weibullScale * std::pow(1.0 / 2e-7, 1.0 / g0.weibullModulus), g0.weibullModulus);
+    log(I.def.name + fmt(" strikes at %.1f m/s", I.report.speedIn));
     switch (I.def.kind) {
         case ImpactorKind::Sphere:
             I.sphere.configure(I.def.contactCurvature(), Es, I.def.yield, I.def.restitution, vn);
@@ -668,6 +669,28 @@ void Pane::beginContact(int k) {
             I.soft.normalSpeed = vn;
             break;
         case ImpactorKind::Projectile: {
+            // Oblique: the bullet keeps its speed and meets every layer at
+            // its slant (line-of-sight) thickness; near grazing it glances off.
+            const Real sp = std::max(length(I.vel), vn);
+            I.losCos = clampr(vn / sp, 0.05, 1.0);
+            if (I.losCos < std::cos(72 * kPi / 180)) {
+                const GlassPly& gl = I.side > 0 ? glass_.front() : glass_.back();
+                const int g = I.side > 0 ? 0 : static_cast<int>(glass_.size()) - 1;
+                const std::uint32_t group = glass_[g].net.newGroup();
+                crush(g, I.hit, std::max(1.5 * I.def.radius, gl.net.cell()), group, 1);
+                startRadials(g, I.hit, std::max(2 * I.def.radius, gl.net.cell()), 3, group, CrackKind::Radial,
+                             gl.mat->crackSpeed);
+                I.report.broke = true;
+                I.report.rebounded = true;
+                I.vel.z = -0.2 * I.vel.z;
+                I.vel.x *= 0.8;
+                I.vel.y *= 0.8;
+                I.report.speedOut = length(I.vel);
+                I.phase = ImpactorPhase::Flight;
+                I.report.outcome = fmt("Ricocheted at %.0f degrees from square", std::acos(I.losCos) * 180 / kPi);
+                log(I.report.outcome);
+                break;
+            }
             std::vector<BallisticLayer> layers;
             const int n = static_cast<int>(lam_.layers.size());
             for (int i = 0; i < n; ++i) {
@@ -676,11 +699,13 @@ void Pane::beginContact(int k) {
                 b.ply = L.ply;
                 b.kind = L.kind;
                 b.mat = def_.plies[L.ply].mat;
-                b.z0 = I.side > 0 ? L.z0 : lam_.thickness - L.z1;
-                b.z1 = I.side > 0 ? L.z1 : lam_.thickness - L.z0;
+                for (const auto& c : crushes_)
+                    if (glass_[c.ply].ply == L.ply) b.rubble = std::max(b.rubble, c.r - length(c.c - I.hit));
+                b.z0 = (I.side > 0 ? L.z0 : lam_.thickness - L.z1) / I.losCos;
+                b.z1 = (I.side > 0 ? L.z1 : lam_.thickness - L.z0) / I.losCos;
                 layers.push_back(b);
             }
-            I.ballistic.configure(layers, I.def, vn, kMushroom);
+            I.ballistic.configure(layers, I.def, sp, kMushroom);
             I.phase = ImpactorPhase::Ballistic;
             // Back-spray: chips thrown back off the struck face.
             const GlassPly& gl = I.side > 0 ? glass_.front() : glass_.back();
@@ -695,7 +720,6 @@ void Pane::beginContact(int k) {
             break;
         }
     }
-    log(I.def.name + fmt(" strikes at %.1f m/s", I.report.speedIn));
     // A laminate already broken here: straight onto the interlayer.
     if (!monolithic_ && I.phase == ImpactorPhase::Contact) {
         bool all = true;
@@ -824,7 +848,7 @@ void Pane::loadPointChecks(int k) {
                 KE > kConeDrive * sq(gm.toughness) / gm.youngs * Acone) {
                 const Real plug = gm.density * kPi * t / 3 * (r1 * r1 + r1 * r2 + r2 * r2);
                 const Real r = 0.5 * (r1 + r2);
-                G.net.markCrush(h, r, group);
+                crush(gs, h, r, group, 0);
                 std::vector<std::uint32_t> cells;
                 for (int j = 0; j < G.net.ny(); ++j)
                     for (int i = 0; i < G.net.nx(); ++i)
@@ -870,7 +894,7 @@ void Pane::loadPointChecks(int k) {
         if (!I.cone && c > 0.5 * G.net.cell()) {
             I.cone = true;  // the pit and its short surface cracks
             const std::uint32_t group = G.net.newGroup();
-            G.net.markCrush(h, std::max(I.contactRadius, 0.5 * G.net.cell()), group);
+            crush(gs, h, std::max(I.contactRadius, 0.5 * G.net.cell()), group, 0);
             startRadials(gs, h, std::max(I.contactRadius, G.net.cell()), 4, group, CrackKind::Radial,
                          gm.crackSpeed);
             log(fmt("sharp tip: %.2f mm median crack", c * 1e3));
@@ -903,7 +927,7 @@ void Pane::breakAtLoad(int k, int g, Real sigma, Real strength, int radials) {
     const Real r0 = std::max(1.3 * I.contactRadius, 1.5 * cell);
     if (G.dicing) {
         I.report.diced = true;
-        G.net.markCrush(I.hit, std::max(I.contactRadius, cell), group);
+        crush(g, I.hit, std::max(I.contactRadius, cell), group, 0);
         startRadials(g, I.hit, r0, 8, group, CrackKind::Dicing, G.mat->crackSpeed);
         log(fmt("tempered ply %.0f fails: the tension core takes over (CT %.0f MPa)", g + 1, G.centralTension / 1e6));
     } else {
@@ -911,7 +935,7 @@ void Pane::breakAtLoad(int k, int g, Real sigma, Real strength, int radials) {
                                   : std::clamp(static_cast<int>(3 + 4 * std::log(std::max(1.0, sigma / strength)) +
                                                                 rng_.uniform(0, 1.5)),
                                                3, 16);
-        G.net.markCrush(I.hit, std::max(0.6 * I.contactRadius, 0.5 * cell), group);
+        crush(g, I.hit, std::max(0.6 * I.contactRadius, 0.5 * cell), group, 0);
         startRadials(g, I.hit, r0, n, group, CrackKind::Radial, G.mat->crackSpeed);
         Star s;
         s.ply = g;
@@ -986,6 +1010,11 @@ void Pane::startMembrane(int k) {
             outer * 1e3));
 }
 
+void Pane::crush(int g, Vec2 c, Real r, std::uint32_t group, int kind) {
+    glass_[g].net.markCrush(c, r, group);
+    crushes_.push_back({g, c, r, time_, kind});
+}
+
 void Pane::ballisticEvents(int k) {
     Impactor& I = imp_[k];
     auto& ev = I.ballistic.events();
@@ -1002,7 +1031,7 @@ void Pane::ballisticEvents(int k) {
         if (G.originTime < 0) { G.origin = I.hit; G.originTime = time_; }
         const std::uint32_t group = G.net.newGroup();
         const Real rc = std::max(1.15 * e.coneRadius, G.net.cell());
-        G.net.markCrush(I.hit, rc, group);
+        crush(g, I.hit, rc, group, 1);
         if (G.dicing) {
             I.report.diced = true;
             startRadials(g, I.hit, rc + G.net.cell(), 8, group, CrackKind::Dicing, G.mat->crackSpeed);
@@ -1045,16 +1074,23 @@ PlaneStress Pane::stressFromCurvature(int g, bool back, const Curvature& k, Real
 }
 
 Curvature Pane::curvatureAt(Vec2 p) {
-    const bool loaded = std::any_of(imp_.begin(), imp_.end(), [](const Impactor& I) {
-        return I.phase == ImpactorPhase::Contact || I.phase == ImpactorPhase::Ballistic || I.phase == ImpactorPhase::Membrane;
-    });
-    // A tenth of the shortest mode period resolves the modal field; the sharp
-    // part under a load is added analytically per point (nearFieldAt).
-    const Real modal = 0.1 / std::max(1.0, plate_.maxFrequencyHz());
-    bool running = false;
-    for (const auto& G : glass_) running = running || G.net.activeTips() > 0;
-    const Real refresh = running ? std::min(5e-6, modal) : loaded ? 20e-6 : 25e-6;
-    if (kGrid_.empty() || time_ - kGridTime_ >= refresh || time_ < kGridTime_) {
+    // Whether the lattice is due is decided once per step.
+    if (kCheckedAt_ != time_ || kGrid_.empty()) {
+        kCheckedAt_ = time_;
+        const bool loaded = std::any_of(imp_.begin(), imp_.end(), [](const Impactor& I) {
+            return I.phase == ImpactorPhase::Contact || I.phase == ImpactorPhase::Ballistic ||
+                   I.phase == ImpactorPhase::Membrane;
+        });
+        // A tenth of the shortest mode period resolves the modal field; the sharp
+        // part under a load is added analytically per point (nearFieldAt).
+        const Real modal = 0.1 / std::max(1.0, plate_.maxFrequencyHz());
+        bool running = false;
+        for (const auto& G : glass_) running = running || G.net.activeTips() > 0;
+        const Real refresh = running ? std::min(5e-6, modal) : loaded ? 20e-6 : 25e-6;
+        kDue_ = kGrid_.empty() || time_ - kGridTime_ >= refresh || time_ < kGridTime_;
+    }
+    if (kDue_) {
+        kDue_ = false;
         const Real W = def_.width, H = def_.height;
         // Two samples per half-wavelength of the shortest mode.
         const int nLong = std::max(16, 2 * std::max(plate_.modesX(), plate_.modesY()) + 1);
@@ -1063,6 +1099,7 @@ Curvature Pane::curvatureAt(Vec2 p) {
         kGrid_.resize(static_cast<std::size_t>(kNx_) * kNy_);
         plate_.sampleGrid(kNx_, kNy_, nullptr, nullptr, kGrid_.data());
         kGridTime_ = time_;
+        kGridBound_ = plate_.curvatureBound();
     }
     const Real fx = clampr(p.x / def_.width, 0, 1) * (kNx_ - 1), fy = clampr(p.y / def_.height, 0, 1) * (kNy_ - 1);
     const int i = std::min(kNx_ - 2, static_cast<int>(fx)), j = std::min(kNy_ - 2, static_cast<int>(fy));
@@ -1303,9 +1340,32 @@ void Pane::probeChecks() {
         if (I.touched) onset = std::max(onset, I.loadOnset);
     if (onset < 0) return;
     const Real rf = rateFactor(time_ - onset);
+    // With nothing pressing on the pane there is no near field, and no probe
+    // can see more than the plate's curvature bound: skip the faces whose
+    // weakest unfired probe that cannot reach. s1 <= E |lever| K (3 - nu) - SC.
+    const bool loaded = std::any_of(imp_.begin(), imp_.end(), [](const Impactor& I) {
+        return (I.phase == ImpactorPhase::Contact || I.phase == ImpactorPhase::Ballistic ||
+                I.phase == ImpactorPhase::Membrane) && I.force > 0;
+    });
+    if (!glass_.empty()) curvatureAt(glass_[0].probes.empty() ? Vec2{} : glass_[0].probes[0].p);  // refresh if due
     for (std::size_t g = 0; g < glass_.size(); ++g) {
         GlassPly& G = glass_[g];
         if (G.fragmented) continue;
+        if (!loaded) {
+            const LaminateLayer& L = lam_.layers[G.layer];
+            bool skip = true;
+            for (int f = 0; f < 2; ++f) {
+                if (G.probeMin[f] < 0) {
+                    G.probeMin[f] = 1e30;
+                    for (const auto& pr : G.probes)
+                        if (!pr.fired[f]) G.probeMin[f] = std::min(G.probeMin[f], pr.strength[f]);
+                }
+                const Real lever = std::fabs(lam_.lever(G.layer, f ? L.z1 : L.z0));
+                const Real bound = L.plateModulus * lever * kGridBound_ * (3 - L.poisson) - G.surfaceCompression;
+                skip = skip && bound <= G.probeMin[f] * rf;
+            }
+            if (skip) continue;
+        }
         const int nx = G.probeNx, ny = G.probeNy;
         for (int j = 1; j < ny - 1; ++j) {
             for (int i = 1; i < nx - 1; ++i) {
@@ -1329,6 +1389,7 @@ void Pane::probeChecks() {
                     s.principal(s1, s2, ang);
                     if (s1 <= pr.strength[f] * rf) continue;
                     pr.fired[f] = true;
+                    G.probeMin[f] = -1;
                     if (!G.net.glassAt(pr.p) || G.net.crackedNear(pr.p, 2 * G.net.cell())) continue;
                     lastDynamic_ = time_;
                     if (G.originTime < 0) { G.origin = pr.p; G.originTime = time_; }
@@ -1546,18 +1607,22 @@ void Pane::sampleFields(int g, int nx, int ny, std::vector<float>& w, std::vecto
 
 PaneStatus Pane::status() const {
     PaneStatus s;
-    Real maxRemoved = 0, maxCracked = 0, haze = 1;
+    Real maxRemoved = 0, maxCracked = 0, maxCrushed = 0, haze = 1;
     for (const auto& G : glass_) {
         const auto& grid = G.net.grid();
-        std::size_t removed = 0, cracked = 0;
+        std::size_t removed = 0, cracked = 0, crushed = 0;
         for (auto c : grid) {
             if (c & CrackNetwork::kRemoved) ++removed;
             else if (c & (CrackNetwork::kIdMask | CrackNetwork::kCrush)) ++cracked;
+            if ((c & CrackNetwork::kCrush) && !(c & CrackNetwork::kRemoved)) ++crushed;
         }
         const Real cellA = sq(G.net.cell());
         maxRemoved = std::max(maxRemoved, static_cast<Real>(removed) * cellA);
-        // About 60 m of crack per m^2 hides the view; a sightline crosses every ply.
-        haze *= std::exp(-G.net.totalLength() / (def_.width * def_.height) / 60.0);
+        maxCrushed = std::max(maxCrushed, static_cast<Real>(crushed) * cellA);
+        // A crack scatters light over a band about 6 mm wide; cracks lie at
+        // random, so a sightline clears one ply with probability exp(-L w / A),
+        // and it crosses every ply.
+        haze *= std::exp(-G.net.totalLength() * 0.006 / (def_.width * def_.height));
         maxCracked = std::max(maxCracked, static_cast<Real>(cracked) / static_cast<Real>(std::max<std::size_t>(1, grid.size())));
         s.cracked = s.cracked || !G.net.segments().empty();
     }
@@ -1569,9 +1634,11 @@ PaneStatus Pane::status() const {
     for (const auto& I : imp_) s.penetrated = s.penetrated || I.report.penetrated;
     s.barrierIntact = s.openArea < 1e-5 && !s.penetrated;
     s.crackedFraction = std::min(1.0, maxCracked * 8);
-    // Through the hole the view is clear; through the glass left, crazed.
+    // Through the hole the view is clear; crushed (white) glass is opaque;
+    // through the rest, hazed by the cracks.
     const Real open = std::min(1.0, s.openArea / area);
-    s.visibility = open + (1 - open) * haze;
+    const Real white = std::min(1.0 - open, maxCrushed / area);
+    s.visibility = open + (1 - open - white) * haze;
     for (const auto& b : bulges_) s.maxBulge = std::max(s.maxBulge, b.depth);
     for (const auto& f : frags_.fragments())
         if (!f.retired && f.state != FragmentState::Held) ++s.fragments;

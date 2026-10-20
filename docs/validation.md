@@ -27,6 +27,8 @@ built to that standard does, not a certification.
 | 7.62 × 51 at 850 m/s on 52 mm rifle-rated GCP | UL 752 Level 8 | Stopped 35 mm in |
 | Three .44 shots on one Level 3 panel | UL 752 multi-shot | All three stopped |
 | 1.8 kg bird at 128.6 m/s on the airliner windshield | 14 CFR 25.775: no penetration | Holds; cabin barrier intact |
+| 9 mm submachine-gun rounds (400 m/s) on a 32 mm armoured car windscreen | EN 1063 BR4 / VPAM 4 class: stops 9 mm | Square on: stopped 12 mm in; at 55°: 7.6 mm in; past 72°: ricochets |
+| 80 rounds scattered over the armoured windscreen, 50° rake | (beyond the test: the rating is for 3 shots) | None through, barrier intact; a round into an old crater goes 30 % deeper; the driver's view falls to 58 % |
 
 ## Other checks
 

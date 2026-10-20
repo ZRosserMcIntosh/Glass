@@ -191,6 +191,16 @@ not stop a rifle; the fit is checked on five other cases (tests). The momentum
 lost each step loads the plate, so the spider web and rings come from the same
 crack model as everything else, ply by ply.
 
+A round that arrives off square keeps its speed and meets every layer at its
+line-of-sight thickness (thickness / cos θ); the plate feels the normal part of
+its force, and the depth reported is through the pane. Beyond 72° from square
+it glances off, leaving a scuff and a few short cracks. A round that lands in
+an earlier crater pays only 15 % of the comminution energy for the glass that
+is already rubble there (estimated: confined rubble still has to be displaced),
+so armour hit repeatedly in one place does give way. Every crushed disc is kept
+(`Pane::crushes()`, `G.crushes`): comminuted glass is white, and the status
+counts it as opaque.
+
 ## Calibration constants
 
 All in [`pane.cpp`](../src/core/src/pane.cpp) and
@@ -205,6 +215,8 @@ All in [`pane.cpp`](../src/core/src/pane.cpp) and
 | Auerbach constant | 5×10⁴ N/m | literature range 10⁴–10⁵ for soda-lime |
 | Interlayer membrane stiffening, rim strain concentration | 2.0, 1.0 | ECE R43: 2.26 kg from 4 m held, from ~20 m/s torn |
 | Comminution energy, interlayer and backing fractions, mushroom coefficient | 40 MJ/m³, 0.01, 0.05, 0.3 | UL 752 Levels 1, 3, 8 |
+| Rubble fraction, ricochet angle | 0.15, 72° | estimated (no published per-hit data for repeat hits on one crater; FMJ on glass ricochets near grazing) |
+| Light band of a crack | 6 mm | estimated: glints either side of a crack line; with crushed area and open area this gives the status's visibility |
 | Crazed-sheet grip, side and hanging shares, confinement exponent | 1.3 × die weight per die width, 0.12, 0.05, 2 | a holed pane empties in 0.3–1 s to a fringe the frame holds, top first (footage of tempered panes emptying); tested, not measured |
 | Crumbling time | 0.8 s × margin / 2 | edges keep shedding dice for a few seconds |
 

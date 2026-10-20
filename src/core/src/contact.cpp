@@ -263,6 +263,11 @@ void Ballistic::configure(const std::vector<BallisticLayer>& layers, const Impac
 static constexpr Real kInterlayerEnergy = 0.01;
 static constexpr Real kBackingEnergy = 0.05;
 static constexpr Real kConeRadiusMax = 0.03;
+// Energy to drive through rubble an earlier hit left, as a fraction of
+// crushing fresh glass (estimated: confined rubble still has to be displaced
+// and re-crushed; armoured glass loses most of its stopping power where it has
+// already been hit).
+static constexpr Real kRubbleFraction = 0.15;
 
 Real Ballistic::step(Real dt, Real time) {
     if (done() || dt <= 0) return 0;
@@ -289,7 +294,9 @@ Real Ballistic::step(Real dt, Real time) {
             // starting from the damage the plies in front already spread.
             const Real s0 = depth_ - L.z0;
             r_ = std::min(kConeRadiusMax, std::max(r_, ap_) + ds * std::tan(L.mat->coneAngle));
-            dE = L.mat->comminution * kPi * r_ * r_ * ds;
+            // Glass an earlier hit already crushed only has to be pushed aside.
+            const Real fresh = r_ * r_ - sq(std::min(r_, L.rubble));
+            dE = L.mat->comminution * kPi * (fresh + kRubbleFraction * (r_ * r_ - fresh)) * ds;
             // The plug of glass straight ahead takes a share of the momentum.
             const Real plug = L.mat->density * kPi * ap_ * ap_ * h;
             E *= std::pow(mp_ / (mp_ + plug), ds / h);

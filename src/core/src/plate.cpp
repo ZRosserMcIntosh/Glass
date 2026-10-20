@@ -294,6 +294,18 @@ Curvature ModalPlate::curvature(Real x, Real y) const {
     return {-wxx, -wyy, -wxy};
 }
 
+Real ModalPlate::curvatureBound() const {
+    Real K = 0;
+    for (int m = 1; m <= M_; ++m) {
+        const Real km = m * kPi / a_;
+        for (int k = 1; k <= N_; ++k) {
+            const Real kn = k * kPi / b_;
+            K += std::fabs(q_[(m - 1) * N_ + k - 1] * sigX_[m] * sigY_[k]) * (km * km + kn * kn);
+        }
+    }
+    return K;
+}
+
 void ModalPlate::sampleGrid(int nx, int ny, Real* w, Real* wdot, Curvature* k) const {
     if (nx < 2 || ny < 2) return;
     // Separable evaluation: T[m][j] = sum_n q[m][n] * (row basis at y_j), then

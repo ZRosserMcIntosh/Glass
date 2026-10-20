@@ -97,6 +97,9 @@ public:
     Real resolutionRadius() const { return resolution_; }
 
     Real energy() const;  // kinetic + strain, J
+    // No curvature component exceeds this anywhere on the plate (1/m): every
+    // mode at its full amplitude, |sin|, |cos| <= 1.
+    Real curvatureBound() const;
     Real maxFrequencyHz() const;
     Real fundamentalHz() const;
     int modesX() const { return M_; }

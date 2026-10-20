@@ -371,6 +371,28 @@
         "porosity": "published: 10-15 % porosity for bird substitutes (Wilbeck 1978)",
         "speed_ms": "estimated: 250 kt, a typical low-altitude speed; V_C at sea level is higher for most jets"
       }
+    },
+    {
+      "id": "smg_9mm",
+      "name": "9 mm FMJ from a submachine gun",
+      "category": "ballistic",
+      "description": "124 gr full metal jacket from a short-barrelled submachine gun: the round the armoured windscreen is rated against, fired at hundreds of rounds a minute.",
+      "kind": "projectile",
+      "mass_g": 8.0,
+      "radius_mm": 4.5,
+      "length_mm": 15.6,
+      "youngs_GPa": 16,
+      "poisson": 0.42,
+      "density_kgm3": 10800,
+      "yield_MPa": 250,
+      "speed_ms": 400,
+      "min_speed_ms": 100,
+      "max_speed_ms": 450,
+      "provenance": {
+        "mass_g": "published: 124 gr (8.0 g) copper-jacketed lead",
+        "speed_ms": "published: typical 9 mm FMJ from a 225 mm submachine-gun barrel, ~390-410 m/s",
+        "yield_MPa": "estimated: as pistol_9mm"
+      }
     }
   ]
 }

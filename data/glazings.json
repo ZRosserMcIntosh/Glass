@@ -225,6 +225,59 @@
         "plies": "estimated: representative of published transport-category windshield construction (outer abrasion ply, heated urethane, two structural ion-exchanged plies); not a specific type",
         "pressure_kPa": "published: 8.6 psi maximum cabin differential of current transport jets (negative: pushes outward, toward the struck face)"
       }
+    },
+    {
+      "id": "armoured_windscreen",
+      "name": "Armoured car windscreen, 32 mm glass-clad polycarbonate",
+      "category": "security",
+      "description": "Four glass plies on polyurethane with a thin polycarbonate spall liner. Rated against handguns and submachine guns: each round crushes a white crater and a spider web, and the liner keeps the glass out of the cabin.",
+      "standard": "EN 1063 BR4 / VPAM 4 class (9 mm and .44 Magnum, 3 shots)",
+      "width_m": 1.25,
+      "height_m": 0.42,
+      "damping": 0.05,
+      "frame_grip_Nm": 900,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "polycarbonate", "thickness_mm": 2.5 }
+      ],
+      "provenance": {
+        "plies": "estimated: representative of 30-35 mm handgun-rated automotive glass-clad polycarbonate; not a certified product",
+        "width_m": "estimated: a small grand tourer's windscreen, flattened",
+        "frame_grip_Nm": "estimated: armoured glazing is bonded into a steel frame"
+      }
+    },
+    {
+      "id": "armoured_side_glass",
+      "name": "Armoured car side glass, 32 mm glass-clad polycarbonate",
+      "category": "security",
+      "description": "The armoured windscreen's layup in a door frame: fixed, it no longer winds down.",
+      "standard": "EN 1063 BR4 / VPAM 4 class (9 mm and .44 Magnum, 3 shots)",
+      "width_m": 0.7,
+      "height_m": 0.36,
+      "damping": 0.05,
+      "frame_grip_Nm": 900,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "polycarbonate", "thickness_mm": 2.5 }
+      ],
+      "provenance": {
+        "plies": "estimated: as armoured_windscreen; not a certified product",
+        "width_m": "estimated: a two-door coupe's side glass, flattened"
+      }
     }
   ]
 }
