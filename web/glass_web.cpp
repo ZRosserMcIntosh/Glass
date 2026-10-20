@@ -33,6 +33,7 @@ struct Sim {
     std::string text;
     std::vector<double> state, imps, plies, report;
     std::vector<float> cracks, frags, poses, field;
+    std::vector<float> sprays;
 };
 
 Sim* g = nullptr;
@@ -269,6 +270,10 @@ GLS_EXPORT double* gls_state() {
     s[21] = static_cast<double>(P.events().size());
     s[22] = P.lastStep();
     s[23] = P.fragmentTime();
+    s[24] = static_cast<double>(P.fragments().sprays().size());
+    int held = 0;
+    for (const auto& sh : P.sheets()) held += sh.remaining();
+    s[25] = held;
     return s;
 }
 
@@ -394,6 +399,27 @@ GLS_EXPORT float* gls_fragment_poses() {
         p[11] = static_cast<float>(f.bornAt);
     }
     return S.poses.data();
+}
+
+// Dice sprays from index `from`: pieces drawn coarser than the real dice that
+// burst into them on landing. [count, then 11 float32 each: x, y, z, vx, vy,
+// vz, dice count, dice size, thickness, time, ply].
+GLS_EXPORT float* gls_sprays(int from) {
+    Sim& S = sim();
+    S.sprays.assign(1, 0);
+    if (!S.pane) return S.sprays.data();
+    const auto& sp = S.pane->fragments().sprays();
+    const std::size_t a = static_cast<std::size_t>(std::max(0, from));
+    for (std::size_t i = a; i < sp.size(); ++i) {
+        const DiceSpray& d = sp[i];
+        const float v[11] = {static_cast<float>(d.pos.x), static_cast<float>(d.pos.y), static_cast<float>(d.pos.z),
+                             static_cast<float>(d.vel.x), static_cast<float>(d.vel.y), static_cast<float>(d.vel.z),
+                             static_cast<float>(d.count), static_cast<float>(d.size), static_cast<float>(d.thickness),
+                             static_cast<float>(d.time), static_cast<float>(d.ply)};
+        S.sprays.insert(S.sprays.end(), v, v + 11);
+    }
+    S.sprays[0] = static_cast<float>(sp.size() > a ? sp.size() - a : 0);
+    return S.sprays.data();
 }
 
 // Deflection (m) and the front / back largest principal stress (Pa) of glass

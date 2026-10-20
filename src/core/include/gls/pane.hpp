@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "gls/collapse.hpp"
 #include "gls/contact.hpp"
 #include "gls/cracks.hpp"
 #include "gls/fragments.hpp"
@@ -173,6 +174,7 @@ public:
     std::vector<Impactor>& impactors() { return imp_; }
     const std::vector<Impactor>& impactors() const { return imp_; }
     const std::vector<Star>& stars() const { return stars_; }
+    const std::vector<CrazedSheet>& sheets() const { return sheets_; }
 
     // Bending plus residual stress on a face of glass ply `g` (index into glass()).
     PlaneStress stress(int g, bool backFace, Vec2 p) const;
@@ -232,6 +234,7 @@ private:
     FragmentSystem frags_;
     std::vector<Impactor> imp_;
     std::vector<Star> stars_;
+    std::vector<CrazedSheet> sheets_;  // shattered tempered plies coming down
     std::vector<std::string> events_;
     Rng rng_;
     Real time_ = 0, lastDt_ = 0, lastProbe_ = -1, lastDynamic_ = -1e9, lastLoaded_ = -1e9;

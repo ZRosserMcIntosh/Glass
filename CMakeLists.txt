@@ -30,6 +30,7 @@ add_library(gls_core
   src/core/src/contact.cpp
   src/core/src/cracks.cpp
   src/core/src/fragments.cpp
+  src/core/src/collapse.cpp
   src/core/src/pane.cpp
   src/core/src/bridge.cpp
 )

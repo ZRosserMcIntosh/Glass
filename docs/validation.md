@@ -37,6 +37,7 @@ built to that standard does, not a certification.
 | Steel BB at 120 m/s on 6 mm annealed | A conical (Hertzian) hole | Cone hole, plug ejected |
 | Baseball at 40 m/s on 4 mm annealed | Breaks the window | Breaks through, keeps ~80 % of its energy |
 | 9 mm on 6 mm annealed / on a windscreen | Glass does not stop pistol bullets | Through at 316 / 346 m/s |
+| Window punch on tempered 6 mm / car side glass, 2 s later | The pane empties from the hole up, a fringe stays in the frame | Above the hole goes first; 7 % of the dice left, all within 6 cm of the frame |
 | Same seed twice; another seed | Identical; different | Identical; different |
 | Same shot at 60 and 997 host frames per second | Identical | Identical |
 | Same shot on every tier | Same outcome | Same outcome (penetrated / held) |

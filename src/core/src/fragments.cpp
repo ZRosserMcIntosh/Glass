@@ -126,6 +126,9 @@ void finishFragment(Fragment& f, Real density) {
 
 void FragmentSystem::clear() {
     frags_.clear();
+    links_.clear();
+    clumps_.clear();
+    sprays_.clear();
     maps.clear();
     nextId_ = 1;
     ++revision;
@@ -298,8 +301,137 @@ int FragmentSystem::build(const CrackNetwork& net, int ply, Real zMid, Real thic
         if (r < 0) { pm.label[c] = -1; continue; }
         if (isNew[r]) pm.label[c] = regionIndex[r];
     }
+    // 7. Which new pieces touch, and along how much boundary.
+    links_.resize(frags_.size());
+    {
+        std::vector<std::pair<std::uint64_t, int>> pairs;
+        auto add = [&](int a, int b) {
+            if (a < 0 || b < 0 || a == b || !isNew[a] || !isNew[b]) return;
+            int fa = regionIndex[a], fb = regionIndex[b];
+            if (fa < 0 || fb < 0) return;
+            if (fa > fb) std::swap(fa, fb);
+            pairs.push_back({(static_cast<std::uint64_t>(fa) << 32) | static_cast<std::uint32_t>(fb), 1});
+        };
+        // Pieces either side of a crack cell share that bit of crack.
+        for (int j = 0; j < ny; ++j)
+            for (int i = 0; i < nx; ++i) {
+                const int c = j * nx + i;
+                if (lab[c] >= 0) {
+                    if (i + 1 < nx) add(lab[c], lab[c + 1]);
+                    if (j + 1 < ny) add(lab[c], lab[c + nx]);
+                    continue;
+                }
+                int seen[8], ns = 0;
+                for (int dj = -1; dj <= 1; ++dj)
+                    for (int di = -1; di <= 1; ++di) {
+                        const int x = i + di, y = j + dj;
+                        if ((di == 0 && dj == 0) || x < 0 || y < 0 || x >= nx || y >= ny) continue;
+                        const int r = lab[y * nx + x];
+                        if (r < 0) continue;
+                        bool dup = false;
+                        for (int k = 0; k < ns; ++k) dup = dup || seen[k] == r;
+                        if (!dup) seen[ns++] = r;
+                    }
+                for (int a = 0; a < ns; ++a)
+                    for (int b = a + 1; b < ns; ++b) add(seen[a], seen[b]);
+            }
+        std::sort(pairs.begin(), pairs.end());
+        for (std::size_t k = 0; k < pairs.size();) {
+            std::size_t e = k;
+            while (e < pairs.size() && pairs[e].first == pairs[k].first) ++e;
+            const int fa = static_cast<int>(pairs[k].first >> 32), fb = static_cast<int>(pairs[k].first & 0xffffffffu);
+            const Real len = static_cast<Real>(e - k) * cell;
+            links_[fa].push_back({fb, len});
+            links_[fb].push_back({fa, len});
+            k = e;
+        }
+    }
     if (added) ++revision;
     return added;
+}
+
+const std::vector<FragmentLink>& FragmentSystem::links(int k) const {
+    static const std::vector<FragmentLink> none;
+    return k >= 0 && k < static_cast<int>(links_.size()) ? links_[k] : none;
+}
+
+int FragmentSystem::makeClump(const std::vector<int>& members, const Vec3& vel, const Vec3& omega, Real time,
+                              Rng& rng) {
+    if (members.empty()) return -1;
+    Clump c;
+    c.members = members;
+    for (const int k : members) {
+        const Fragment& f = frags_[k];
+        c.mass += f.mass;
+        c.pos += f.pos * f.mass;
+    }
+    c.pos = c.pos / c.mass;
+    Real ix = 0, iy = 0, iz = 0;
+    for (const int k : members) {
+        Fragment& f = frags_[k];
+        const Vec3 r = f.pos - c.pos;
+        ix += f.inertia.x + f.mass * (r.y * r.y + r.z * r.z);
+        iy += f.inertia.y + f.mass * (r.x * r.x + r.z * r.z);
+        iz += f.inertia.z + f.mass * (r.x * r.x + r.y * r.y);
+        c.radius = std::max(c.radius, length(r) + f.radius);
+        f.clump = static_cast<int>(clumps_.size());
+        f.clumpOffset = r;  // pieces are pane-aligned while they hang in the frame
+        f.rot = Quat{};
+        f.state = FragmentState::Free;
+    }
+    c.inertia = {std::max(ix, 1e-12), std::max(iy, 1e-12), std::max(iz, 1e-12)};
+    c.vel = vel;
+    c.omega = omega;
+    // Slabs of loose dice come apart in the air within a few tenths of a second.
+    c.breakupAt = time + 0.15 + 0.5 * rng.uniform() + 0.02 * std::sqrt(static_cast<Real>(members.size()));
+    c.alive = true;
+    clumps_.push_back(std::move(c));
+    ++revision;
+    return static_cast<int>(clumps_.size() - 1);
+}
+
+void FragmentSystem::dissolve(int ci, Real, Rng& rng, Real spread) {
+    Clump& c = clumps_[ci];
+    if (!c.alive) return;
+    c.alive = false;
+    for (const int k : c.members) {
+        Fragment& f = frags_[k];
+        if (f.clump != ci) continue;
+        f.clump = -1;
+        const Vec3 r = c.rot.rotate(f.clumpOffset);
+        f.vel = c.vel + cross(c.omega, r) +
+                Vec3{rng.uniform(-spread, spread), rng.uniform(0, spread), rng.uniform(-spread, spread)};
+        f.omega = c.omega + Vec3{rng.uniform(-20, 20), rng.uniform(-20, 20), rng.uniform(-10, 10)} * (spread + 0.1);
+        f.state = FragmentState::Free;
+    }
+}
+
+void FragmentSystem::stepClumps(Real dt, Real time, Rng& rng) {
+    for (int ci = 0; ci < static_cast<int>(clumps_.size()); ++ci) {
+        Clump& c = clumps_[ci];
+        if (!c.alive) continue;
+        const Real sp = length(c.vel);
+        Real area = 0;
+        for (const int k : c.members) area += frags_[k].area;
+        const Vec3 drag = c.vel * (-0.5 * kAirDensity * 1.2 * 0.5 * area * sp);
+        c.vel += (Vec3{0, -kGravity, 0} + drag / c.mass) * dt;
+        c.omega *= std::exp(-0.6 * dt);
+        c.pos += c.vel * dt;
+        c.rot.integrate(c.omega, dt);
+        bool landed = false;
+        for (const int k : c.members) {
+            Fragment& f = frags_[k];
+            const Vec3 r = c.rot.rotate(f.clumpOffset);
+            f.pos = c.pos + r;
+            f.rot = c.rot;
+            f.vel = c.vel + cross(c.omega, r);
+            f.omega = c.omega;
+            if (f.pos.y - f.radius < floorY) landed = true;
+        }
+        // A slab of loose dice does not survive the floor, nor long in the air.
+        if (landed) dissolve(ci, time, rng, 0.35 + 0.08 * std::fabs(c.vel.y));
+        else if (time >= c.breakupAt) dissolve(ci, time, rng, 0.25);
+    }
 }
 
 int FragmentSystem::fragmentAt(int ply, Vec2 p) const {
@@ -374,12 +506,13 @@ void FragmentSystem::split(std::size_t k, Rng& rng, Real time) {
 }
 
 void FragmentSystem::step(Real dt, Real time, Rng& rng) {
+    stepClumps(dt, time, rng);
     std::vector<std::size_t> toSplit;
     const std::size_t n = frags_.size();
     const Real spinDecay = std::exp(-0.4 * dt);
     for (std::size_t k = 0; k < n; ++k) {
         Fragment& f = frags_[k];
-        if (f.retired) continue;
+        if (f.retired || f.clump >= 0) continue;
         if (f.state == FragmentState::Pending && time >= f.releaseTime) f.state = FragmentState::Free;
         if (f.state != FragmentState::Free) continue;
         // Gravity and quadratic air drag on the mean tumbling area.
@@ -400,6 +533,9 @@ void FragmentSystem::step(Real dt, Real time, Rng& rng) {
             }
         }
         if (minY >= floorY) continue;
+        // A face or edge on the floor scrubs off spin a point contact cannot
+        // (about the normal, and rocking): rolling and spinning friction.
+        f.omega *= std::exp(-12 * dt);
         f.pos.y += floorY - minY;
         low.y = floorY;
         const Vec3 r = low - f.pos;
@@ -421,6 +557,23 @@ void FragmentSystem::step(Real dt, Real time, Rng& rng) {
             }
             f.vel += J / f.mass;
             f.omega += bodyInverse(f.rot, f.inertia, cross(r, J));
+            // A tempered piece drawn coarser than the real dice bursts into
+            // them when it lands; renderers scatter the real ones.
+            if (f.diceSize > 0 && f.radius > 0.75 * f.diceSize && -vn > 0.8 && !f.chip) {
+                DiceSpray d;
+                d.pos = f.pos;
+                d.vel = f.vel;
+                d.count = static_cast<int>(std::clamp(f.area / (f.diceSize * f.diceSize), 2.0, 400.0));
+                d.size = f.diceSize;
+                d.thickness = f.thickness;
+                d.time = time;
+                d.ply = f.ply;
+                sprays_.push_back(d);
+                f.retired = true;
+                f.outline.clear();
+                ++revision;
+                continue;
+            }
             // Hard landings break the piece (energy against new crack surface).
             const Real cut = 2 * std::sqrt(f.area / kPi);
             if (0.5 * f.mass * vn * vn > breakEnergyFactor * toughnessEnergy * f.thickness * cut && f.generation < 3 &&
@@ -428,7 +581,9 @@ void FragmentSystem::step(Real dt, Real time, Rng& rng) {
                 toSplit.push_back(k);
         }
         // Settled: a few slow contacts in a row put it to sleep.
-        f.calm = (length(f.vel) < 0.12 && length(f.omega) < 3) ? f.calm + 1 : 0;
+        // Spin counts by how fast it moves the edge: a small die jitters on its
+        // corner at a few rad/s with the edge barely moving.
+        f.calm = (length(f.vel) + length(f.omega) * f.radius < 0.12) ? f.calm + 1 : 0;
         if (f.calm > 6) {
             f.vel = {};
             f.omega = {};

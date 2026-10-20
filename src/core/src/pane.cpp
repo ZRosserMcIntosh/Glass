@@ -31,7 +31,6 @@ constexpr Real kDiceHalfAngle = deg(28);   // tempered forks
 constexpr Real kDiceEnergyFraction = 0.5;  // share of stored energy that makes new surface
 constexpr Real kDiceBranchRatio = 0.9;     // fork spacing / energy-balance fragment size
 constexpr Real kWedgeSupport = 1.0;        // wedge-root moment / tip-loaded cantilever value
-constexpr Real kUnlockSpeed = 1.5;         // m/s: tempered dice unlocking from the hole outward
 constexpr Real kFragmentStiffening = 2.0;  // bonded fragments stiffen the interlayer membrane
 constexpr Real kStrainConcentration = 1.0; // interlayer strain at fragment edges over the mean
 constexpr Real kMushroom = 0.3;            // ballistic nose flattening coefficient
@@ -183,6 +182,8 @@ bool Pane::quiet() const {
         if (G.net.activeTips() > 0) return false;
     for (const auto& f : frags_.fragments())
         if (!f.retired && (f.state == FragmentState::Free || f.state == FragmentState::Pending)) return false;
+    for (const auto& sh : sheets_)
+        if (sh.active()) return false;
     return plate_.energy() < 1e-7;
 }
 
@@ -191,6 +192,7 @@ Real Pane::chooseStep() const {
     bool fragsMoving = false;
     for (const auto& f : frags_.fragments())
         if (!f.retired && (f.state == FragmentState::Free || f.state == FragmentState::Pending)) { fragsMoving = true; break; }
+    for (const auto& sh : sheets_) fragsMoving = fragsMoving || sh.active();
     if (fragsMoving) dt = std::min(dt, 0.5e-3);
     for (const auto& I : imp_) {
         switch (I.phase) {
@@ -285,6 +287,8 @@ void Pane::step(Real dt) {
         }
         while (time_ - fragTime_ >= kFragmentStep) {
             fragTime_ += kFragmentStep;
+            for (auto& sh : sheets_)
+                if (sh.active()) sh.step(frags_, fragTime_, rng_, [this](int f) { releaseFragment(f); });
             frags_.step(kFragmentStep, fragTime_, rng_);
         }
     }
@@ -629,6 +633,7 @@ void Pane::beginContact(int k) {
     I.touched = true;
     I.phase = ImpactorPhase::Contact;
     I.report.contactStart = time_;
+    for (auto& sh : sheets_) sh.disturb(I.hit, 0.08, time_);
     I.loadOnset = time_;
     lastDynamic_ = time_;
     // The struck surface: the first ply in the direction of travel.
@@ -1407,6 +1412,8 @@ void Pane::freezeCheck() {
         }
         net.markRemovedCells(crushed);
         int freed = 0, pending = 0, held = 0;
+        std::vector<int> sheetDice, sheetGone;
+        std::vector<char> sheetFrame;
         for (std::size_t i = before; i < frags_.fragments().size(); ++i) {
             Fragment& f = frags_.fragments()[i];
             if (f.chip || f.retired || f.bornAt != time_) continue;
@@ -1426,9 +1433,12 @@ void Pane::freezeCheck() {
                 }
             }
             if (G.dicing) {
-                // Released strain energy pops the dice.
-                f.vel += Vec3{rng_.uniform(-0.15, 0.15), rng_.uniform(-0.15, 0.15), rng_.uniform(-0.5, 0.5)};
-                f.omega += Vec3{rng_.uniform(-6, 6), rng_.uniform(-6, 6), rng_.uniform(-3, 3)};
+                f.diceSize = G.diceSize;
+                if (pushed) {
+                    // Released strain energy pops the dice in the impactor's path.
+                    f.vel += Vec3{rng_.uniform(-0.15, 0.15), rng_.uniform(-0.15, 0.15), rng_.uniform(-0.5, 0.5)};
+                    f.omega += Vec3{rng_.uniform(-6, 6), rng_.uniform(-6, 6), rng_.uniform(-3, 3)};
+                }
             }
             bool supported = false;
             if (!pushed && std::fabs(f.vel.z) < 1.0) {
@@ -1438,21 +1448,42 @@ void Pane::freezeCheck() {
                 else if (edgesTouched >= 2) supported = true;                      // wedged across a corner
                 else if (f.edges && def_.frameGrip * f.edgeContact >= f.mass * kGravity) supported = true;
             }
-            if (supported) {
+            // The dice at the break origin are pulverised and leave a hole.
+            if (G.dicing && !pushed && length(c - G.origin) < std::max(1.2 * G.diceSpacing, 2 * net.cell())) {
+                pushed = true;
+                f.vel = Vec3{rng_.uniform(-0.3, 0.3), rng_.uniform(-0.3, 0.3), rng_.uniform(-0.6, 0.6)};
+            }
+            if (G.dicing && !pushed) {
+                // Crazed but still in the frame: the sheet decides when it goes.
+                f.state = FragmentState::Held;
+                f.vel = {};
+                f.omega = {};
+                sheetDice.push_back(static_cast<int>(i));
+                sheetFrame.push_back(supported ? 1 : 0);
+                ++pending;
+            } else if (supported) {
                 f.state = FragmentState::Held;
                 f.vel = {};
                 f.omega = {};
                 ++held;
-            } else if (G.dicing && !pushed) {
-                f.state = FragmentState::Pending;
-                f.releaseTime = time_ + length(c - G.origin) / kUnlockSpeed * rng_.uniform(0.7, 1.3);
-                ++pending;
             } else {
                 releaseFragment(static_cast<int>(i));
+                if (G.dicing) sheetGone.push_back(static_cast<int>(i));
                 ++freed;
             }
         }
-        log(fmt("ply cut into %.0f pieces: %.0f fall, %.0f stay in the frame", added, freed + pending, held));
+        if (G.dicing && sheetDice.size() > 1) {
+            // Everything released so far counts as the hole the sheet starts from.
+            for (const int k : sheetGone) sheetDice.push_back(k), sheetFrame.push_back(0);
+            CrazedSheet sheet;
+            sheet.begin(frags_, sheetDice, sheetFrame, sheetGone, G.origin, def_.frameGrip, time_, rng_);
+            sheets_.push_back(std::move(sheet));
+        }
+        if (G.dicing)
+            log(fmt("tempered ply crazed into %.0f dice: %.0f fall at once, %.0f hang in the frame", added, freed,
+                    pending));
+        else
+            log(fmt("ply cut into %.0f pieces: %.0f fall, %.0f stay in the frame", added, freed, held));
     }
 }
 
@@ -1515,7 +1546,7 @@ void Pane::sampleFields(int g, int nx, int ny, std::vector<float>& w, std::vecto
 
 PaneStatus Pane::status() const {
     PaneStatus s;
-    Real maxRemoved = 0, maxCrackLen = 0, maxCracked = 0;
+    Real maxRemoved = 0, maxCracked = 0, haze = 1;
     for (const auto& G : glass_) {
         const auto& grid = G.net.grid();
         std::size_t removed = 0, cracked = 0;
@@ -1525,7 +1556,8 @@ PaneStatus Pane::status() const {
         }
         const Real cellA = sq(G.net.cell());
         maxRemoved = std::max(maxRemoved, static_cast<Real>(removed) * cellA);
-        maxCrackLen = std::max(maxCrackLen, G.net.totalLength());
+        // About 60 m of crack per m^2 hides the view; a sightline crosses every ply.
+        haze *= std::exp(-G.net.totalLength() / (def_.width * def_.height) / 60.0);
         maxCracked = std::max(maxCracked, static_cast<Real>(cracked) / static_cast<Real>(std::max<std::size_t>(1, grid.size())));
         s.cracked = s.cracked || !G.net.segments().empty();
     }
@@ -1537,8 +1569,9 @@ PaneStatus Pane::status() const {
     for (const auto& I : imp_) s.penetrated = s.penetrated || I.report.penetrated;
     s.barrierIntact = s.openArea < 1e-5 && !s.penetrated;
     s.crackedFraction = std::min(1.0, maxCracked * 8);
-    // Crack density against sight: about 60 m of crack per m^2 hides the view.
-    s.visibility = std::exp(-maxCrackLen / area / 60.0) * (1 - s.openArea / area);
+    // Through the hole the view is clear; through the glass left, crazed.
+    const Real open = std::min(1.0, s.openArea / area);
+    s.visibility = open + (1 - open) * haze;
     for (const auto& b : bulges_) s.maxBulge = std::max(s.maxBulge, b.depth);
     for (const auto& f : frags_.fragments())
         if (!f.retired && f.state != FragmentState::Held) ++s.fragments;

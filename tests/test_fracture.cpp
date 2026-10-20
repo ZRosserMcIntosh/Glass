@@ -160,6 +160,62 @@ TEST_CASE("tempered: a window punch dices the pane, and the dice meet ECE R43") 
     CHECK(gone > held);
 }
 
+namespace {
+struct Collapse {
+    int remaining = 0, size = 0, heldAbove = 0, above = 0, heldBelow = 0, below = 0, farFromFrame = 0;
+    std::size_t sprays = 0;
+};
+Collapse collapseAt(const Pane& p) {
+    Collapse c;
+    if (p.sheets().empty()) return c;
+    c.remaining = p.sheets()[0].remaining();
+    c.size = static_cast<int>(p.sheets()[0].size());
+    c.sprays = p.fragments().sprays().size();
+    const double w = p.glazing().width, h = p.glazing().height;
+    for (const auto& f : p.fragments().fragments()) {
+        if (f.retired || f.chip || f.diceSize <= 0) continue;
+        const bool held = f.state == FragmentState::Held, up = f.origin.y > 0.5 * h;
+        (up ? c.above : c.below)++;
+        if (held) (up ? c.heldAbove : c.heldBelow)++;
+        if (held && std::min({f.origin.x, w - f.origin.x, f.origin.y, h - f.origin.y}) > 0.06) ++c.farFromFrame;
+    }
+    return c;
+}
+}  // namespace
+
+TEST_CASE("tempered: a holed pane comes down from the hole up; a fringe stays in the frame") {
+    for (const char* glazing : {"tempered_6", "car_side_tempered"}) {
+        auto s = shoot(glazing, "window_punch", -1, 2, 1, false, {-1, -1}, 0.1);
+        const Collapse early = collapseAt(*s.pane);
+        CHECK(early.size > 1000);
+        // Above the hole nothing bears it up: the top comes down first.
+        CHECK(static_cast<double>(early.heldAbove) / early.above < 0.5 * early.heldBelow / early.below);
+        s.pane->advance(2.0);
+        const Collapse late = collapseAt(*s.pane);
+        std::cout << "    " << glazing << ": " << late.remaining << " of " << late.size << " dice left in the frame, "
+                  << late.sprays << " pieces burst into dice on landing\n";
+        CHECK_RANGE(static_cast<double>(late.remaining) / late.size, 0.02, 0.15);
+        CHECK(late.farFromFrame == 0);
+        // Pieces drawn coarser than the dice burst into them when they land.
+        CHECK(late.sprays > static_cast<std::size_t>(late.size / 2));
+    }
+}
+
+TEST_CASE("tempered: the collapse is the same for the same seed, different for another") {
+    auto run = [](std::uint64_t seed) {
+        auto s = shoot("tempered_6", "hammer", -1, 1, seed, false, {-1, -1}, 0.05);
+        std::vector<int> left;
+        for (const double t : {0.15, 0.3, 0.6}) {
+            s.pane->advance(t);
+            left.push_back(collapseAt(*s.pane).remaining);
+        }
+        return left;
+    };
+    const auto a = run(7), b = run(7), c = run(8);
+    CHECK(a == b);
+    CHECK(a != c);
+}
+
 TEST_CASE("tempered: the drawn dice match the energy balance at full resolution") {
     const auto s = shoot("tempered_6", "window_punch", -1, 4, 1, false, {-1, -1}, 0.01);
     const GlassPly& G = s.pane->glass()[0];

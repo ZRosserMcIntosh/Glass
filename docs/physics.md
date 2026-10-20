@@ -146,11 +146,36 @@ simplified (Douglas-Peucker). Each piece gets the plate's local velocity and
 spin, the impactor's velocity if it lies in its path, and for tempered glass a
 small kick from the released strain energy. A piece stays if it sits on the
 bottom edge, is wedged across two edges, or the gasket's grip on its edge
-(N/m) holds its weight; tempered dice unlock from the hole outward at 1.5 m/s.
-Free pieces fly with gravity and quadratic drag on a fixed 0.5 ms step, hit the
+(N/m) holds its weight. Free pieces fly with gravity and quadratic drag on a fixed 0.5 ms step, hit the
 floor with restitution 0.25 and friction 0.45, sleep when they settle, and
 break again along a random line if a landing's energy beats 40 × the new crack
-surface energy.
+surface energy. A piece resting on the floor loses spin to rolling friction,
+and sleeps once its edge moves slower than 0.12 m/s.
+
+### How a crazed tempered pane comes down
+
+Once the dicing front has crossed a tempered ply, the pane is a crazed sheet
+([`collapse.cpp`](../src/core/src/collapse.cpp)): thousands of dice with no
+strength between them, held only by friction where they press on each other
+and on the frame. Every contact between two dice (pieces either side of a
+crack) gets a grip drawn once from the seed, scaled by the length of crack they
+share. A die's capacity is the grip of its neighbours still in place,
+counted fully from the die below (bearing), 12 % from the sides and 5 % from
+above, times (neighbours left / neighbours it had)² because friction needs
+wedging all round, plus the frame's grip for edge dice. A die falls when
+that is less than its weight.
+
+Each release queues a check of its neighbours after the time to slide clear of
+a 0.2–1.5 mm gap under gravity, so the sheet unzips from the hole at the speed
+gravity allows: above the hole first, which bears on nothing, then the rest.
+Neighbours that would also fall and grip it hard come away with it as a slab
+(a rigid clump that breaks up after 0.15–0.65 s or on the floor), and an
+exposed die that only just holds may crumble off later on its own (an
+exponential wait whose mean grows with its margin). The crushed ring round a
+hole touches nothing, so dice on the rim are checked directly. What is left is
+a fringe the frame holds. A piece drawn coarser than the real dice bursts into
+a spray of them where it lands; renderers scatter the spray (`G.sprays`).
+New impacts make the dice near them re-check.
 
 ## 6. Bullets
 
@@ -180,7 +205,8 @@ All in [`pane.cpp`](../src/core/src/pane.cpp) and
 | Auerbach constant | 5×10⁴ N/m | literature range 10⁴–10⁵ for soda-lime |
 | Interlayer membrane stiffening, rim strain concentration | 2.0, 1.0 | ECE R43: 2.26 kg from 4 m held, from ~20 m/s torn |
 | Comminution energy, interlayer and backing fractions, mushroom coefficient | 40 MJ/m³, 0.01, 0.05, 0.3 | UL 752 Levels 1, 3, 8 |
-| Unlock speed of tempered dice | 1.5 m/s | high-speed footage of tempered panes emptying |
+| Crazed-sheet grip, side and hanging shares, confinement exponent | 1.3 × die weight per die width, 0.12, 0.05, 2 | a holed pane empties in 0.3–1 s to a fringe the frame holds, top first (footage of tempered panes emptying); tested, not measured |
+| Crumbling time | 0.8 s × margin / 2 | edges keep shedding dice for a few seconds |
 
 ## Main gaps
 
