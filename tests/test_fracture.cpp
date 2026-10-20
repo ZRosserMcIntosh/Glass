@@ -154,8 +154,9 @@ TEST_CASE("tempered: a window punch dices the pane, and the dice meet ECE R43") 
     // The pieces fall out from the break outward; a fringe stays in the frame.
     int held = 0, gone = 0;
     for (const auto& f : s.pane->fragments().fragments()) {
-        if (f.retired || f.chip) continue;
-        (f.state == FragmentState::Held ? held : gone)++;
+        if (f.chip) continue;
+        // A piece that came apart into dice (retired) has gone too.
+        (f.retired || f.state != FragmentState::Held ? gone : held)++;
     }
     CHECK(gone > held);
 }
@@ -193,12 +194,29 @@ TEST_CASE("tempered: a holed pane comes down from the hole up; a fringe stays in
         s.pane->advance(2.0);
         const Collapse late = collapseAt(*s.pane);
         std::cout << "    " << glazing << ": " << late.remaining << " of " << late.size << " dice left in the frame, "
-                  << late.sprays << " pieces burst into dice on landing\n";
+                  << late.sprays << " pieces came apart into dice\n";
         CHECK_RANGE(static_cast<double>(late.remaining) / late.size, 0.02, 0.15);
         CHECK(late.farFromFrame == 0);
-        // Pieces drawn coarser than the dice burst into them when they land.
+        // Pieces drawn coarser than the dice come apart into them, in the air or on landing.
         CHECK(late.sprays > static_cast<std::size_t>(late.size / 2));
     }
+}
+
+TEST_CASE("tempered: over the piece budget, no part of the pane goes missing") {
+    // A brick on high quality crazes into more regions than the tier's piece
+    // budget: they merge into coarser pieces rather than leave glass out.
+    auto s = shoot("tempered_6", "brick", -1, 3, 1, false, {-1, -1}, 0.02);
+    const GlazingDef& g = s.pane->glazing();
+    double area = 0, top = 0;
+    for (const auto& f : s.pane->fragments().fragments()) {
+        if (f.chip) continue;
+        area += f.area;
+        top = std::max(top, f.origin.y);
+    }
+    std::cout << "    pieces cover " << 100 * area / (g.width * g.height) << " % of the pane\n";
+    CHECK(area > 0.85 * g.width * g.height);
+    CHECK(top > 0.9 * g.height);
+    CHECK(static_cast<int>(s.pane->fragments().fragments().size()) <= s.pane->budget().maxFragments);
 }
 
 TEST_CASE("tempered: the collapse is the same for the same seed, different for another") {

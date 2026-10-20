@@ -1484,6 +1484,19 @@ void Pane::freezeCheck() {
             f.vel = {0, 0, wd};
             f.omega = {gr.y, -gr.x, 0};
             bool pushed = false;
+            // Pieces under an object still driving into the glass go with it
+            // (it can craze the pane before it has punched its hole).
+            for (const auto& I : imp_) {
+                if (!I.touched || I.side * I.vel.z <= 0.05) continue;
+                // The ring of dice bordering what it crushed is shoved aside too.
+                const Real reach = kPushRadius * std::max(I.def.radius, I.contactRadius) + (G.dicing ? G.diceSpacing : 0.0);
+                if (length(c - I.hit) < reach + 0.5 * f.radius) {
+                    pushed = true;
+                    const Vec2 out = normalize(c - I.hit);
+                    f.vel = I.vel * rng_.uniform(0.6, 1.0) + Vec3{out.x, out.y, 0} * (0.1 * length(I.vel));
+                    f.omega = {rng_.uniform(-40, 40), rng_.uniform(-40, 40), rng_.uniform(-20, 20)};
+                }
+            }
             for (const auto& hole : holes_) {
                 // Pieces in the impactor's path go with it.
                 if (f.radius < 4 * hole.r && length(c - hole.c) < hole.r + std::min(0.5 * f.radius, hole.r)) {

@@ -201,6 +201,61 @@ int FragmentSystem::build(const CrackNetwork& net, int ply, Real zMid, Real thic
     std::vector<char> isNew(regions, 1);
     for (int r = 0; r < regions; ++r)
         if (owner[r] >= 0 && oldCount[owner[r]] == count[r]) isNew[r] = 0;
+    // 3b. Over the piece budget: merge the smallest new regions into a
+    // neighbour until they fit, so the whole pane is still covered (coarser
+    // pieces, never missing ones). A few slots stay free for chips and splits.
+    {
+        int newCount = 0;
+        for (int r = 0; r < regions; ++r) newCount += isNew[r] && count[r] > 0;
+        const int room = std::max(1, maxFragments - static_cast<int>(frags_.size()) - std::max(8, maxFragments / 20));
+        if (newCount > room) {
+            std::vector<int> parent(regions);
+            for (int r = 0; r < regions; ++r) parent[r] = r;
+            auto find = [&](int r) {
+                while (parent[r] != r) r = parent[r] = parent[parent[r]];
+                return r;
+            };
+            std::vector<std::vector<int>> adj(regions);
+            for (int j = 0; j < ny; ++j)
+                for (int i = 0; i < nx; ++i) {
+                    const int a = lab[j * nx + i];
+                    if (a < 0 || !isNew[a]) continue;
+                    if (i + 1 < nx) { const int b = lab[j * nx + i + 1]; if (b >= 0 && b != a && isNew[b]) adj[a].push_back(b); }
+                    if (j + 1 < ny) { const int b = lab[(j + 1) * nx + i]; if (b >= 0 && b != a && isNew[b]) adj[a].push_back(b); }
+                }
+            for (int r = 0; r < regions; ++r)
+                for (const int b : std::vector<int>(adj[r])) adj[b].push_back(r);
+            for (auto& v : adj) { std::sort(v.begin(), v.end()); v.erase(std::unique(v.begin(), v.end()), v.end()); }
+            std::vector<int> size(count);
+            std::vector<int> order;
+            for (int r = 0; r < regions; ++r)
+                if (isNew[r] && count[r] > 0) order.push_back(r);
+            // Repeated sweeps, smallest first, until the count fits.
+            for (int sweep = 0; sweep < 8 && newCount > room; ++sweep) {
+                std::sort(order.begin(), order.end(), [&](int a, int b) { return size[find(a)] < size[find(b)]; });
+                for (const int r0 : order) {
+                    if (newCount <= room) break;
+                    const int r = find(r0);
+                    if (r != r0) continue;  // visit each root once per sweep
+                    int best = -1;
+                    for (const int b : adj[r]) {
+                        const int rb = find(b);
+                        if (rb != r && (best < 0 || size[rb] < size[best])) best = rb;
+                    }
+                    if (best < 0) continue;
+                    parent[r] = best;
+                    size[best] += size[r];
+                    for (const int b : adj[r]) adj[best].push_back(b);
+                    --newCount;
+                }
+            }
+            for (std::size_t c = 0; c < N; ++c)
+                if (lab[c] >= 0 && isNew[lab[c]]) lab[c] = find(lab[c]);
+            std::fill(count.begin(), count.end(), 0);
+            for (std::size_t c = 0; c < N; ++c)
+                if (lab[c] >= 0) ++count[lab[c]];
+        }
+    }
     // Old pieces that were split are retired.
     for (std::size_t c = 0; c < N; ++c) {
         if (lab[c] < 0 || !isNew[lab[c]]) continue;
@@ -515,6 +570,29 @@ void FragmentSystem::step(Real dt, Real time, Rng& rng) {
         if (f.retired || f.clump >= 0) continue;
         if (f.state == FragmentState::Pending && time >= f.releaseTime) f.state = FragmentState::Free;
         if (f.state != FragmentState::Free) continue;
+        // A tempered piece drawn coarser than the real dice is a handful of
+        // them barely locked together: in the air it soon comes apart, and
+        // renderers scatter the real dice from where it was.
+        if (f.diceSize > 0 && !f.chip && f.radius > 0.75 * f.diceSize) {
+            if (f.freeAt < 0) f.freeAt = time;
+            const std::uint32_t h = static_cast<std::uint32_t>(f.id) * 2654435761u;
+            const Real delay = 0.04 + 0.12 * static_cast<Real>(h >> 8) / 16777216.0;
+            if (time - f.freeAt > delay) {
+                DiceSpray d;
+                d.pos = f.pos;
+                d.vel = f.vel;
+                d.count = static_cast<int>(std::clamp(f.area / (f.diceSize * f.diceSize), 2.0, 400.0));
+                d.size = f.diceSize;
+                d.thickness = f.thickness;
+                d.time = time;
+                d.ply = f.ply;
+                sprays_.push_back(d);
+                f.retired = true;
+                f.outline.clear();
+                ++revision;
+                continue;
+            }
+        }
         // Gravity and quadratic air drag on the mean tumbling area.
         const Real sp = length(f.vel);
         const Vec3 drag = f.vel * (-0.5 * kAirDensity * 1.2 * 0.5 * f.area * sp);

@@ -36,6 +36,7 @@ struct Fragment {
     int clump = -1;             // index of the clump it falls with, or -1
     Vec3 clumpOffset;           // centroid relative to the clump's, clump frame
     Real diceSize = 0;          // m, real tempered dice size of its ply (0: not tempered)
+    Real freeAt = -1;  // s, when it last came free (a coarse tempered piece crumbles soon after)
     bool chip = false;          // spall / crush debris, not traced from a crack network
     bool retired = false;       // replaced by the pieces it broke into
     std::uint8_t edges = 0;     // pane edges touched: 1 left, 2 right, 4 bottom, 8 top

@@ -142,7 +142,9 @@ Lower tiers draw coarser dice; the result panel reports the real size.
 When a monolithic ply's cracks have been quiet for 150 µs and nothing presses
 on it, its grid is flood-filled (4-connected) into regions, crack cells are
 shared out to their neighbours, and each region's outline is traced and
-simplified (Douglas-Peucker). Each piece gets the plate's local velocity and
+simplified (Douglas-Peucker). When a ply has more regions than the tier's
+piece budget left, the smallest merge into a neighbour until they fit, so the
+pieces always cover the whole ply (coarser, never missing). Each piece gets the plate's local velocity and
 spin, the impactor's velocity if it lies in its path, and for tempered glass a
 small kick from the released strain energy. A piece stays if it sits on the
 bottom edge, is wedged across two edges, or the gasket's grip on its edge
@@ -172,10 +174,14 @@ Neighbours that would also fall and grip it hard come away with it as a slab
 (a rigid clump that breaks up after 0.15–0.65 s or on the floor), and an
 exposed die that only just holds may crumble off later on its own (an
 exponential wait whose mean grows with its margin). The crushed ring round a
-hole touches nothing, so dice on the rim are checked directly. What is left is
-a fringe the frame holds. A piece drawn coarser than the real dice bursts into
-a spray of them where it lands; renderers scatter the spray (`G.sprays`).
-New impacts make the dice near them re-check.
+hole touches nothing, so dice on the rim are checked directly; dice under an
+object still driving through the glass (and the ring it shoves aside) go with
+it, so a punch that crazes the pane before it has made its hole still starts
+the collapse. What is left is a fringe the frame holds. A piece drawn coarser
+than the real dice is only a handful of them barely locked together: 40 to
+160 ms after it comes free (seeded per piece) it comes apart in the air, or on
+the floor if it lands first, into a spray of real-size dice that renderers
+scatter (`G.sprays`). New impacts make the dice near them re-check.
 
 ## 6. Bullets
 
