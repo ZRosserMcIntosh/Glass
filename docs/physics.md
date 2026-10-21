@@ -110,7 +110,14 @@ on a grid that records which crack owns each cell.
   (Freund's form with the terminal speed v_t ≈ 1,520 m/s for soda-lime).
 - **Direction:** the maximum hoop-stress kink angle for the local K_II/K_I
   (Erdogan & Sih), developed over about a plate thickness of growth, plus a
-  small random walk.
+  small random walk and a slow wander (an Ornstein–Uhlenbeck offset, 0.12 rad
+  rms over 4 cm): glass is not perfectly uniform, and real cracks meander a
+  few degrees either side of where the stress points them. The kink is scaled
+  by the deviatoric share of the stress, dev / (dev + residual), since a
+  residual tension pulls equally every way; and a running crack bends no
+  tighter than a 0.1 m radius (sharp changes of direction come as forks).
+  Without these, heat-strengthened cracks looped round on the plate's
+  ring-down and annealed radials ran ruler-straight.
 - **Forking:** when σ √(distance since the last fork) passes 3 × the mirror
   relation (A_b = 2.1 MPa√m) and σ exceeds A_b/√(0.6 h). Forks at ±17°
   (±28° in tempered glass).
@@ -118,6 +125,15 @@ on a grid that records which crack owns each cell.
   it; the shielded one stops, and one cell away they coalesce.
 - **Arrest at cracks and edges:** a tip that enters another crack's cell
   stops there, so cracks end on cracks as in real glass.
+
+**Radial count and the crushed zone.** A pane breaking under a load sends out
+4 + 4 ln(σ/strength) + 1.5 ln(1 + E/100 J) radials (plus up to 3 at random,
+4–18 in all): a ball that barely breaks the glass leaves a handful, a
+cannonball a sunburst, never the same twice. Crushed discs are never clean
+circles: their edge is ragged (five harmonics, 14 % of the radius).
+Inside a crack star the plate is wedges split by its radials, not the
+continuous plate the modes describe, so flaw probes there do not fire on the
+plate's bending wave (the wedges make their own rings).
 
 **Wedges.** Radial cracks from a load point leave wedges loaded at their tips.
 As cantilevers their roots carry 3F/(πh²) on the face toward the impact
@@ -257,6 +273,7 @@ All in [`pane.cpp`](../src/core/src/pane.cpp) and
 | Light band of a crack | 6 mm | estimated: glints either side of a crack line; with crushed area and open area this gives the status's visibility |
 | Crazed-sheet grip, side and hanging shares, confinement exponent | 1.3 × die weight per die width, 0.12, 0.05, 2 | a holed pane empties in 0.3–1 s to a fringe the frame holds, top first (footage of tempered panes emptying); tested, not measured |
 | Crumbling time | 0.8 s × margin / 2 | edges keep shedding dice for a few seconds |
+| Crack wander, its length, tightest bend; ragged crush edge | 0.12 rad, 4 cm, 0.1 m; 14 % | estimated: the meander of radial cracks in photographs of broken annealed and heat-strengthened panes |
 | Blast hold threshold, gas reach | 1 kPa, 0.6 m | estimated: a kPa beats any piece's weight and frame grip per area; the gas jet acts over about half a window's width |
 
 ## Main gaps

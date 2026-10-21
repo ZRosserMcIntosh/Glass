@@ -39,6 +39,10 @@ constexpr Real kConeDrive = 50;            // energy to drive a cone through / i
 constexpr Real kAuerbach = 5e4;            // N/m: Hertzian cone load / ball radius (Auerbach's law)
 constexpr Real kWedgeStiffness = 1.0;      // wedge ring stiffness / (2 pi D / L^2)
 constexpr Real kRadialDrive = 1.0;         // hoop stress at radial tips / wedge-root stress
+constexpr Real kCrushRagged = 0.14;        // amplitude of the crushed zone's ragged edge (of its radius)
+constexpr Real kWanderAngle = 0.12;        // rad, rms wander of a crack about its stress-preferred path
+constexpr Real kWanderLength = 0.04;       // m, over which the wander changes
+constexpr Real kMinTurnRadius = 0.1;       // m, tightest bend of a running (non-ring) crack
 constexpr Real kBlastActive = 200;         // Pa of blast pressure that counts as loading the pane
 constexpr Real kBlastHold = 1000;          // Pa above which a blast tears loose pieces from their hold
 constexpr Real kLaminateWedgeSupport = 0.15; // the same for wedges bonded to an interlayer
@@ -968,10 +972,13 @@ void Pane::breakAtLoad(int k, int g, Real sigma, Real strength, int radials) {
         startRadials(g, I.hit, r0, 8, group, CrackKind::Dicing, G.mat->crackSpeed);
         log(fmt("tempered ply %.0f fails: the tension core takes over (CT %.0f MPa)", g + 1, G.centralTension / 1e6));
     } else {
+        // More load over the strength, and more energy behind it, more radials:
+        // a ball that barely breaks a pane leaves a handful, a cannonball a sunburst.
         const int n = radials > 0 ? radials
-                                  : std::clamp(static_cast<int>(3 + 4 * std::log(std::max(1.0, sigma / strength)) +
-                                                                rng_.uniform(0, 1.5)),
-                                               3, 16);
+                                  : std::clamp(static_cast<int>(4 + 4 * std::log(std::max(1.0, sigma / strength)) +
+                                                                1.5 * std::log(1 + I.report.energyIn / 100) +
+                                                                rng_.uniform(0, 3)),
+                                               4, 18);
         crush(g, I.hit, std::max(0.6 * I.contactRadius, 0.5 * cell), group, 0);
         startRadials(g, I.hit, r0, n, group, CrackKind::Radial, G.mat->crackSpeed);
         Star s;
@@ -1048,7 +1055,13 @@ void Pane::startMembrane(int k) {
 }
 
 void Pane::crush(int g, Vec2 c, Real r, std::uint32_t group, int kind) {
-    glass_[g].net.markCrush(c, r, group);
+    // Never a clean circle: crushed glass breaks out along a ragged edge.
+    Real a[5], ph[5];
+    for (int k = 0; k < 5; ++k) {
+        a[k] = kCrushRagged * rng_.uniform(0.3, 1.0) / std::sqrt(k + 1.0);
+        ph[k] = rng_.uniform(0, 2 * kPi);
+    }
+    glass_[g].net.markCrush(c, r, group, a, ph, 5);
     crushes_.push_back({g, c, r, time_, kind});
 }
 
@@ -1240,7 +1253,12 @@ void Pane::growCracks(Real dt) {
                     Real sn = std::max(sf, sb);
                     const Real tau = n.x * (use.sxx * tip.dir.x + use.sxy * tip.dir.y) +
                                      n.y * (use.sxy * tip.dir.x + use.syy * tip.dir.y);
-                    tip.kink = sn > 0 ? kinkAngle(tau / sn) : 0;
+                    // Residual tension pulls equally every way: the more of the
+                    // stress it is, the less the bending steers the crack (else
+                    // heat-strengthened cracks loop round on the plate's ring-down).
+                    const Real dev = 0.5 * std::hypot(use.sxx - use.syy, 2 * use.sxy);
+                    const Real steer = tip.kind == CrackKind::Dicing ? 1.0 : dev / (dev + G.surfaceCompression + ct + 1e-9);
+                    tip.kink = (sn > 0 ? kinkAngle(tau / sn) * steer : 0) + (tip.kind == CrackKind::Dicing ? 0 : tip.wob);
                     tip.radial = false;
                     if (tip.kind != CrackKind::Dicing) {
                         for (const auto& dv : drive) {
@@ -1251,7 +1269,7 @@ void Pane::growCracks(Real dt) {
                             if (sd > sn) {
                                 sn = sd;
                                 tip.radial = true;
-                                tip.kink = std::atan2(cross(tip.dir, out), dot(tip.dir, out));
+                                tip.kink = std::atan2(cross(tip.dir, out), dot(tip.dir, out)) + tip.wob;
                             }
                         }
                     }
@@ -1289,9 +1307,18 @@ void Pane::growCracks(Real dt) {
                 const Real ds = v * dt;
                 // The kink develops over about a plate thickness of growth.
                 Real turn = tip.kink * std::min(1.0, ds / (tip.fixedStress ? cell : h));
+                // A running crack keeps its heading: it bends, it does not hook
+                // round (sharp changes of direction come as forks).
+                if (!tip.fixedStress && tip.kind != CrackKind::Dicing)
+                    turn = clampr(turn, -ds / kMinTurnRadius, ds / kMinTurnRadius);
                 tip.kink -= turn;
                 const Real noise = tip.kind == CrackKind::Dicing ? 0.09 : (tip.fixedStress ? 0.02 : 0.035);
                 turn += rng_.normal() * noise * std::sqrt(ds / cell);
+                // Glass is not perfectly uniform: a running crack wanders a few
+                // degrees either side of where the stress points it, slowly.
+                if (tip.kind != CrackKind::Dicing && !tip.fixedStress)
+                    tip.wob += -tip.wob * ds / kWanderLength +
+                               kWanderAngle * std::sqrt(2 * ds / kWanderLength) * rng_.normal();
                 tip.dir = rotate(tip.dir, turn);
                 if (!net.advance(static_cast<int>(i), tip.pos + tip.dir * ds, t1)) continue;
             }
@@ -1315,16 +1342,17 @@ void Pane::growCracks(Real dt) {
 void Pane::ringCracks() {
     for (auto& s : stars_) {
         const Impactor& I = imp_[s.impactor];
-        if ((I.phase != ImpactorPhase::Contact && I.phase != ImpactorPhase::Ballistic &&
-             I.phase != ImpactorPhase::Membrane) ||
-            I.force <= 0)
-            continue;
         GlassPly& G = glass_[s.ply];
+        // How far the star's radials have split the plate (kept after the load goes).
         for (const auto& t : G.net.tips()) {
             if (!t.alive || t.fixedStress) continue;
             if (G.net.cracks()[t.crack].group != s.group) continue;
             s.reach = std::max(s.reach, length(t.pos - s.centre));
         }
+        if ((I.phase != ImpactorPhase::Contact && I.phase != ImpactorPhase::Ballistic &&
+             I.phase != ImpactorPhase::Membrane) ||
+            I.force <= 0)
+            continue;
         const Real cell = G.net.cell();
         if (s.reach < 6 * cell || s.reach < 1.6 * s.lastRing) continue;
         // Wedges between radial cracks are cantilevers loaded at the tip: the
@@ -1418,6 +1446,13 @@ void Pane::probeChecks() {
                         length(pr.p - I.hit) < plate_.resolutionRadius())
                         underLoad = true;
                 if (underLoad) continue;
+                // Inside a crack star the plate is wedges split by its radials,
+                // not the continuous plate the modes describe: its rings come
+                // from the wedges (ringCracks), not from the plate's bending wave.
+                bool inStar = false;
+                for (const auto& st : stars_)
+                    if (st.ply == static_cast<int>(g) && length(pr.p - st.centre) < st.reach) inStar = true;
+                if (inStar) continue;
                 const Curvature kp = curvatureAt(pr.p);
                 const Real nf = nearFieldAt(pr.p);
                 for (int f = 0; f < 2; ++f) {

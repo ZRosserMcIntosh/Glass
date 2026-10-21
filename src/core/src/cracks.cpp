@@ -246,14 +246,22 @@ void CrackNetwork::addRing(Vec2 c, Real r, Real t, CrackKind kind, std::uint32_t
     kill(k, t);
 }
 
-void CrackNetwork::markCrush(Vec2 c, Real r, std::uint32_t group) {
-    const int i0 = std::max(0, static_cast<int>((c.x - r) / cell_));
-    const int i1 = std::min(nx_ - 1, static_cast<int>((c.x + r) / cell_));
-    const int j0 = std::max(0, static_cast<int>((c.y - r) / cell_));
-    const int j1 = std::min(ny_ - 1, static_cast<int>((c.y + r) / cell_));
+void CrackNetwork::markCrush(Vec2 c, Real r, std::uint32_t group, const Real* a, const Real* ph, int n) {
+    Real rmax = r;
+    for (int k = 0; k < n; ++k) rmax += r * std::fabs(a[k]);
+    const int i0 = std::max(0, static_cast<int>((c.x - rmax) / cell_));
+    const int i1 = std::min(nx_ - 1, static_cast<int>((c.x + rmax) / cell_));
+    const int j0 = std::max(0, static_cast<int>((c.y - rmax) / cell_));
+    const int j1 = std::min(ny_ - 1, static_cast<int>((c.y + rmax) / cell_));
     for (int j = j0; j <= j1; ++j)
         for (int i = i0; i <= i1; ++i) {
-            if (length(cellCentre(i, j) - c) > r) continue;
+            const Vec2 d = cellCentre(i, j) - c;
+            Real rr = r;
+            if (n > 0) {
+                const Real th = std::atan2(d.y, d.x);
+                for (int k = 0; k < n; ++k) rr += r * a[k] * std::cos((k + 2) * th + ph[k]);
+            }
+            if (length(d) > rr) continue;
             std::uint32_t& g = at(i, j);
             if (!(g & kRemoved)) g = kCrush | (group & kIdMask);
         }

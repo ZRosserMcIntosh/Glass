@@ -43,6 +43,7 @@ struct CrackTip {
     Real shield = 1;           // stress relief from a nearby parallel crack (1 none)
     Real kink = 0;             // rad still to turn (maximum hoop stress criterion)
     bool radial = false;       // driven outward by the wedges of a crack star
+    Real wob = 0;              // rad, slowly wandering offset from the stress-preferred path
     std::uint32_t crack = 0;
     CrackKind kind = CrackKind::Radial;
     bool alive = true;
@@ -89,7 +90,8 @@ public:
     // A closed ring crack (the surface trace of a Hertzian cone).
     void addRing(Vec2 c, Real r, Real t, CrackKind kind, std::uint32_t group);
     // A crushed disc (Hertzian cone, ballistic crush zone), stamped with group.
-    void markCrush(Vec2 c, Real r, std::uint32_t group);
+    // Crushed glass in a ragged disc: radius r (1 + sum a_k cos((k + 2) theta + ph_k)).
+    void markCrush(Vec2 c, Real r, std::uint32_t group, const Real* a = nullptr, const Real* ph = nullptr, int n = 0);
     void markRemovedCells(const std::vector<std::uint32_t>& cells);
     bool crackedNear(Vec2 p, Real r) const;  // any crack or crush within r
     bool glassAt(Vec2 p) const;
