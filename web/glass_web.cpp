@@ -286,6 +286,33 @@ GLS_EXPORT int gls_fire(int index, double x, double y, double speed, double yaw,
     return S.pane->fire(S.lib.impactors[index], {x, y}, speed, yaw, pitch, fromBack != 0, lead);
 }
 
+// The same, the impactor given another mass (kg) and radius (m) when > 0:
+// a piece of glass from another pane, say.
+GLS_EXPORT int gls_fire_as(int index, double x, double y, double speed, double yaw, double pitch, int fromBack,
+                           double lead, double mass, double radius) {
+    Sim& S = sim();
+    if (!S.pane || index < 0 || index >= static_cast<int>(S.lib.impactors.size())) return -1;
+    ImpactorDef d = S.lib.impactors[index];
+    if (mass > 0) d.mass = mass;
+    if (radius > 0) {
+        if (d.length > 0) d.length *= radius / d.radius;
+        d.radius = radius;
+    }
+    return S.pane->fire(d, {x, y}, speed, yaw, pitch, fromBack != 0, lead);
+}
+
+// Takes fragment record i out of the scene (it has become something else's
+// impactor). Returns 1 if it was there.
+GLS_EXPORT int gls_drop_fragment(int i) {
+    Sim& S = sim();
+    if (!S.pane) return 0;
+    auto& fr = S.pane->fragments().fragments();
+    if (i < 0 || i >= static_cast<int>(fr.size()) || fr[i].retired) return 0;
+    fr[i].retired = true;
+    fr[i].clump = -1;
+    return 1;
+}
+
 // Whole internal steps until time >= t (s) or maxSteps; returns steps taken.
 GLS_EXPORT int gls_advance(double t, int maxSteps) {
     Sim& S = sim();

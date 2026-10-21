@@ -373,6 +373,30 @@
       }
     },
     {
+      "id": "glass_shard",
+      "name": "Glass shard",
+      "category": "debris",
+      "description": "A blade of broken glass flying edge-first, as the pieces of one pane strike the next. In a stack of panes each flying piece hits with its own mass and size.",
+      "kind": "sharp",
+      "mass_g": 20,
+      "radius_mm": 25,
+      "length_mm": 50,
+      "contact_radius_mm": 0.3,
+      "tip_angle_deg": 55,
+      "youngs_GPa": 72,
+      "poisson": 0.22,
+      "density_kgm3": 2500,
+      "yield_MPa": 3000,
+      "speed_ms": 20,
+      "min_speed_ms": 2,
+      "max_speed_ms": 120,
+      "provenance": {
+        "tip_angle_deg": "estimated: the corner of a broken piece of glass",
+        "yield_MPa": "estimated: a glass corner crushes at a few GPa of contact pressure, below the hardness",
+        "youngs_GPa": "published: soda-lime glass, 72 GPa"
+      }
+    },
+    {
       "id": "bird_4lb",
       "name": "Bird 1.8 kg (4 lb)",
       "category": "aviation",
