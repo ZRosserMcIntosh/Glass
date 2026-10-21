@@ -254,6 +254,33 @@
       }
     },
     {
+      "id": "armoured_windscreen_v8",
+      "name": "Armoured supercar windscreen, 32 mm glass-clad polycarbonate",
+      "category": "security",
+      "description": "The armoured windscreen's layup in a mid-engined supercar's screen: bigger, and raked about 70 degrees, so rounds from the front strike it at a glancing angle, see a much thicker barrier and sometimes skip off.",
+      "standard": "EN 1063 BR4 / VPAM 4 class (9 mm and .44 Magnum, 3 shots)",
+      "width_m": 1.0,
+      "height_m": 0.9,
+      "damping": 0.05,
+      "frame_grip_Nm": 900,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "polycarbonate", "thickness_mm": 2.5 }
+      ],
+      "provenance": {
+        "plies": "estimated: as armoured_windscreen; not a certified product",
+        "width_m": "estimated: the flat that best fits the Rosser V8 model's windscreen (rake 69.5 degrees)",
+        "frame_grip_Nm": "estimated: armoured glazing is bonded into a steel frame"
+      }
+    },
+    {
       "id": "armoured_side_glass",
       "name": "Armoured car side glass, 32 mm glass-clad polycarbonate",
       "category": "security",
