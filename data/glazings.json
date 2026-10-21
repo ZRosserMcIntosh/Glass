@@ -89,12 +89,14 @@
       "height_m": 0.85,
       "damping": 0.04,
       "frame_grip_Nm": 200,
+      "edge_hold_kNm": 100,
       "plies": [
         { "material": "soda_lime_float", "thickness_mm": 2.1, "treatment": "annealed" },
         { "material": "pvb", "thickness_mm": 0.76 },
         { "material": "soda_lime_float", "thickness_mm": 2.1, "treatment": "annealed" }
       ],
       "provenance": {
+        "edge_hold_kNm": "estimated: a polyurethane bead bonding the glass to the body, ~5 MPa over ~20 mm",
         "plies": "published: the common passenger-car windscreen layup",
         "damping": "estimated: PVB interlayer raises modal damping to several percent",
         "width_m": "estimated: a mid-size windscreen, flattened"
@@ -127,6 +129,7 @@
       "height_m": 1.2,
       "damping": 0.03,
       "frame_grip_Nm": 400,
+      "edge_hold_kNm": 30,
       "plies": [
         { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "heat_strengthened", "surface_compression_MPa": 40 },
         { "material": "ionoplast", "thickness_mm": 2.28 },
@@ -144,6 +147,7 @@
       "height_m": 0.6,
       "damping": 0.05,
       "frame_grip_Nm": 600,
+      "bite_mm": 25,
       "plies": [
         { "material": "soda_lime_float", "thickness_mm": 5, "treatment": "annealed" },
         { "material": "pvb", "thickness_mm": 1.27 },
@@ -155,7 +159,7 @@
         { "material": "pvb", "thickness_mm": 1.27 },
         { "material": "soda_lime_float", "thickness_mm": 5, "treatment": "annealed" }
       ],
-      "provenance": { "plies": "estimated: representative of 1.2 in all-glass Level 1 products; not a certified product" }
+      "provenance": { "plies": "estimated: representative of 1.2 in all-glass Level 1 products; not a certified product", "bite_mm": "estimated: bullet-resistant glazing sits about 1 in (25 mm) deep in a steel frame, held by its sealant bond" }
     },
     {
       "id": "ul752_l3",
@@ -167,6 +171,7 @@
       "height_m": 0.6,
       "damping": 0.05,
       "frame_grip_Nm": 600,
+      "bite_mm": 25,
       "plies": [
         { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
         { "material": "tpu", "thickness_mm": 1.27 },
@@ -176,7 +181,7 @@
         { "material": "tpu", "thickness_mm": 1.27 },
         { "material": "polycarbonate", "thickness_mm": 9.5 }
       ],
-      "provenance": { "plies": "estimated: representative glass-clad polycarbonate Level 3 build-up; not a certified product" }
+      "provenance": { "plies": "estimated: representative glass-clad polycarbonate Level 3 build-up; not a certified product", "bite_mm": "estimated: bullet-resistant glazing sits about 1 in (25 mm) deep in a steel frame, held by its sealant bond" }
     },
     {
       "id": "ul752_l8",
@@ -188,6 +193,7 @@
       "height_m": 0.6,
       "damping": 0.05,
       "frame_grip_Nm": 800,
+      "bite_mm": 25,
       "plies": [
         { "material": "soda_lime_float", "thickness_mm": 8, "treatment": "annealed" },
         { "material": "tpu", "thickness_mm": 1.27 },
@@ -201,7 +207,35 @@
         { "material": "tpu", "thickness_mm": 1.27 },
         { "material": "polycarbonate", "thickness_mm": 6 }
       ],
-      "provenance": { "plies": "estimated: representative rifle-rated build-up; not a certified product" }
+      "provenance": { "plies": "estimated: representative rifle-rated build-up; not a certified product", "bite_mm": "estimated: bullet-resistant glazing sits about 1 in (25 mm) deep in a steel frame, held by its sealant bond" }
+    },
+    {
+      "id": "ul752_l10",
+      "name": "Glass-clad polycarbonate, 95 mm (UL 752 Level 10 class)",
+      "category": "security",
+      "description": "Six thick glass plies over a polycarbonate backing, for a .50 calibre rifle: nearly twice the thickness of the Level 8 build.",
+      "standard": "UL 752 Level 10 (.50 caliber 708 gr, 856-942 m/s, 1 shot)",
+      "width_m": 0.6,
+      "height_m": 0.6,
+      "damping": 0.05,
+      "frame_grip_Nm": 800,
+      "bite_mm": 25,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 15, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 12, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 12, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 12, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 12, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "soda_lime_float", "thickness_mm": 12, "treatment": "annealed" },
+        { "material": "tpu", "thickness_mm": 1.27 },
+        { "material": "polycarbonate", "thickness_mm": 12.7 }
+      ],
+      "provenance": { "plies": "estimated: representative .50-calibre-rated build-up, sized so the model stops the Level 10 round; not a certified product", "bite_mm": "estimated: bullet-resistant glazing sits about 1 in (25 mm) deep in a steel frame, held by its sealant bond" }
     },
     {
       "id": "aircraft_windshield",
@@ -214,6 +248,7 @@
       "damping": 0.05,
       "pressure_kPa": -59.3,
       "frame_grip_Nm": 2000,
+      "edge_hold_kNm": 300,
       "plies": [
         { "material": "aluminosilicate", "thickness_mm": 3, "treatment": "chemical", "surface_compression_MPa": 400, "layer_depth_um": 250 },
         { "material": "tpu", "thickness_mm": 6 },
@@ -222,6 +257,7 @@
         { "material": "aluminosilicate", "thickness_mm": 8, "treatment": "chemical", "surface_compression_MPa": 350, "layer_depth_um": 350 }
       ],
       "provenance": {
+        "edge_hold_kNm": "estimated: bolted through the edge members of the windshield frame",
         "plies": "estimated: representative of published transport-category windshield construction (outer abrasion ply, heated urethane, two structural ion-exchanged plies); not a specific type",
         "pressure_kPa": "published: 8.6 psi maximum cabin differential of current transport jets (negative: pushes outward, toward the struck face)"
       }
@@ -236,6 +272,7 @@
       "height_m": 0.42,
       "damping": 0.05,
       "frame_grip_Nm": 900,
+      "edge_hold_kNm": 60,
       "plies": [
         { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
         { "material": "tpu", "thickness_mm": 1.27 },
@@ -248,6 +285,7 @@
         { "material": "polycarbonate", "thickness_mm": 2.5 }
       ],
       "provenance": {
+        "edge_hold_kNm": "estimated: polyurethane-bonded behind a steel overlap frame",
         "plies": "estimated: representative of 30-35 mm handgun-rated automotive glass-clad polycarbonate; not a certified product",
         "width_m": "estimated: a small grand tourer's windscreen, flattened",
         "frame_grip_Nm": "estimated: armoured glazing is bonded into a steel frame"
@@ -263,6 +301,7 @@
       "height_m": 0.9,
       "damping": 0.05,
       "frame_grip_Nm": 900,
+      "edge_hold_kNm": 60,
       "plies": [
         { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
         { "material": "tpu", "thickness_mm": 1.27 },
@@ -275,6 +314,7 @@
         { "material": "polycarbonate", "thickness_mm": 2.5 }
       ],
       "provenance": {
+        "edge_hold_kNm": "estimated: polyurethane-bonded behind a steel overlap frame",
         "plies": "estimated: as armoured_windscreen; not a certified product",
         "width_m": "estimated: the flat that best fits the Rosser V8 model's windscreen (rake 69.5 degrees)",
         "frame_grip_Nm": "estimated: armoured glazing is bonded into a steel frame"
@@ -344,6 +384,7 @@
       "height_m": 0.36,
       "damping": 0.05,
       "frame_grip_Nm": 900,
+      "edge_hold_kNm": 60,
       "plies": [
         { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "annealed" },
         { "material": "tpu", "thickness_mm": 1.27 },
@@ -356,6 +397,7 @@
         { "material": "polycarbonate", "thickness_mm": 2.5 }
       ],
       "provenance": {
+        "edge_hold_kNm": "estimated: polyurethane-bonded behind a steel overlap frame",
         "plies": "estimated: as armoured_windscreen; not a certified product",
         "width_m": "estimated: a two-door coupe's side glass, flattened"
       }

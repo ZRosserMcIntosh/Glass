@@ -287,6 +287,7 @@ GLS_EXPORT double gls_last_step() { return sim().pane ? sim().pane->lastStep() :
 // fragments, [13] laminate thickness m, [14] width, [15] height,
 // [16] fundamental Hz, [17] highest mode Hz, [18] plate modes x, [19] y,
 // [20] crack cell m, [21] events, [22] last step s, [23] when the pieces were last stepped s
+// ... [27] blast pressure Pa, [28] a laminate pulled out of its frame whole
 GLS_EXPORT double* gls_state() {
     Sim& S = sim();
     S.state.assign(32, 0);
@@ -324,6 +325,7 @@ GLS_EXPORT double* gls_state() {
     s[25] = held;
     s[26] = static_cast<double>(P.crushes().size());
     s[27] = P.blastPressure(P.time());
+    s[28] = P.pulledOut() ? 1 : 0;
     return s;
 }
 

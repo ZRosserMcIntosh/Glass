@@ -227,6 +227,10 @@ public:
 
     // Loads the pane with a blast wave (it can arrive later).
     void blast(const BlastLoad& b);
+    // A laminate pulled out of its frame whole, wrapped round what hit it.
+    bool pulledOut() const { return pulledOut_; }
+    // N/m of in-plane pull the frame holds the laminate's edge against.
+    Real edgeHold() const;
     Real blastPressure(Real t) const;  // Pa, all blasts at engine time t
     const std::vector<BlastLoad>& blasts() const { return blasts_; }
 
@@ -252,6 +256,7 @@ private:
     void freezeCheck();
     void releaseFragment(int index);
     void blowOut(Real p);
+    void pullOut(int k, Real edgePull);
     Real rateFactor(Real loadTime) const;
     Real nearFieldAt(Vec2 p) const;
     PlaneStress stressFromCurvature(int g, bool back, const Curvature& k, Real extraIso, bool layered = false) const;
@@ -297,6 +302,7 @@ private:
     std::vector<Hole> holes_;
     std::vector<BlastLoad> blasts_;
     Real blastOnset_ = -1;  // s, when a blast first loaded the pane
+    bool pulledOut_ = false;
 };
 
 }  // namespace gls

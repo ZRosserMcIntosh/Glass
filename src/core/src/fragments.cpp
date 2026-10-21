@@ -591,6 +591,20 @@ void FragmentSystem::split(std::size_t k, Rng& rng, Real time) {
     ++revision;
 }
 
+std::vector<int> FragmentSystem::breakUp(int k, Real maxRadius, Rng& rng, Real time) {
+    std::vector<int> out, todo{k};
+    while (!todo.empty()) {
+        const int i = todo.back();
+        todo.pop_back();
+        if (frags_[i].radius <= maxRadius) { out.push_back(i); continue; }
+        const std::size_t before = frags_.size();
+        split(static_cast<std::size_t>(i), rng, time);
+        if (!frags_[i].retired) { out.push_back(i); continue; }  // could not split it
+        for (std::size_t j = before; j < frags_.size(); ++j) todo.push_back(static_cast<int>(j));
+    }
+    return out;
+}
+
 bool FragmentSystem::inOpening(const Vec3& p) const {
     constexpr Real kMargin = 0.05;
     return p.x > -kMargin && p.y > -kMargin && p.x < pushSize.x + kMargin && p.y < pushSize.y + kMargin;

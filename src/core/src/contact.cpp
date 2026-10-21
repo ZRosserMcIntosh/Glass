@@ -172,6 +172,13 @@ bool Membrane::torn() const {
     return true;
 }
 
+Real Membrane::strength() const {
+    Real N = 0;
+    for (const auto& p : plies_)
+        if (!p.torn) N += p.thickness * p.tensile;
+    return N;
+}
+
 Real Membrane::tension(Real e) const {
     Real N = 0;
     for (const auto& p : plies_) {
@@ -200,7 +207,7 @@ Real Membrane::strainAt(Real N) const {
 }
 
 Real Membrane::force(Real delta) {
-    if (delta <= 0 || torn()) { rimStrain_ = 0; return 0; }
+    if (delta <= 0 || torn()) { rimStrain_ = rimTension_ = 0; return 0; }
     const Real span = Rm_ - Rc_;
     const Real len = std::sqrt(span * span + delta * delta);
     // Stretched generator length for rim tension Nc (tension ~ Nc Rc / r),
@@ -222,6 +229,7 @@ Real Membrane::force(Real delta) {
         (stretched(mid) < len ? lo : hi) = mid;
     }
     const Real Nc = 0.5 * (lo + hi);
+    rimTension_ = Nc;
     rimStrain_ = strainAt(Nc) * conc_;
     bool tore = false;
     for (auto& p : plies_)
@@ -239,8 +247,10 @@ Real Membrane::shape(Real r, Real delta) const {
 // ---- Ballistic ---------------------------------------------------------------------------
 
 void Ballistic::configure(const std::vector<BallisticLayer>& layers, const ImpactorDef& p, Real speed,
-                          Real mushroomFactor) {
+                          Real mushroomFactor, bool membraneBacking) {
     layers_ = layers;
+    membrane_ = membraneBacking;
+    handedOff_ = false;
     events_.clear();
     mp_ = p.mass;
     ap0_ = ap_ = p.radius;
@@ -262,7 +272,11 @@ void Ballistic::configure(const std::vector<BallisticLayer>& layers, const Impac
 // laminates: tests/test_ballistic.cpp).
 static constexpr Real kInterlayerEnergy = 0.01;
 static constexpr Real kBackingEnergy = 0.05;
+// The crushed cone stops spreading at about this many projectile radii
+// (0.03 m for the 9 mm the constants were calibrated with); it scales with the
+// projectile, so a .50 or a cannonball crushes a cone its own size.
 static constexpr Real kConeRadiusMax = 0.03;
+static constexpr Real kConeRadiusRatio = kConeRadiusMax / 0.0045;
 // Energy to drive through rubble an earlier hit left, as a fraction of
 // crushing fresh glass (estimated: confined rubble still has to be displaced
 // and re-crushed; armoured glass loses most of its stopping power where it has
@@ -280,9 +294,24 @@ Real Ballistic::step(Real dt, Real time) {
         int idx = -1;
         for (int i = 0; i < static_cast<int>(layers_.size()); ++i)
             if (depth_ >= layers_[i].z0 - 1e-12 && depth_ < layers_[i].z1 - 1e-12) { idx = i; break; }
-        if (idx < 0) { exited_ = depth_ >= total; break; }
+        if (idx < 0) {
+            if (membrane_) handedOff_ = true;  // the polymer between the crushed plies takes it
+            else exited_ = depth_ >= total;
+            break;
+        }
         const BallisticLayer& L = layers_[idx];
         const Real h = L.z1 - L.z0;
+        if (membrane_ && L.kind != MaterialKind::Glass) {
+            bool glassAhead = false;
+            for (std::size_t i = idx + 1; i < layers_.size(); ++i) glassAhead = glassAhead || layers_[i].kind == MaterialKind::Glass;
+            if (!glassAhead) { handedOff_ = true; break; }
+            // Polymer between glass plies stretches with the rest of it later.
+            const Real ds = std::min(rem, L.z1 - depth_);
+            depth_ += ds;
+            rem -= ds;
+            elapsed += ds / std::max(v_, 1e-6);
+            continue;
+        }
         if (idx != layer_) {
             layer_ = idx;
             if (L.kind == MaterialKind::Glass) events_.push_back({L.ply, time + elapsed, std::max(r_, ap_), E, v_});
@@ -293,7 +322,7 @@ Real Ballistic::step(Real dt, Real time) {
             // Crushed cone: its radius grows through the ply at the cone angle,
             // starting from the damage the plies in front already spread.
             const Real s0 = depth_ - L.z0;
-            r_ = std::min(kConeRadiusMax, std::max(r_, ap_) + ds * std::tan(L.mat->coneAngle));
+            r_ = std::min(std::max(kConeRadiusMax, kConeRadiusRatio * ap0_), std::max(r_, ap_) + ds * std::tan(L.mat->coneAngle));
             // Glass an earlier hit already crushed only has to be pushed aside.
             const Real fresh = r_ * r_ - sq(std::min(r_, L.rubble));
             dE = L.mat->comminution * kPi * (fresh + kRubbleFraction * (r_ * r_ - fresh)) * ds;
@@ -323,7 +352,11 @@ Real Ballistic::step(Real dt, Real time) {
         depth_ += ds;
         v_ = std::sqrt(2 * E / mp_);
         rem -= ds;
-        if (depth_ >= total - 1e-12) { exited_ = true; break; }
+        if (depth_ >= total - 1e-12) {
+            if (membrane_) handedOff_ = true;
+            else exited_ = true;
+            break;
+        }
     }
     absorbed_ = 0.5 * mp_ * v0_ * v0_ - 0.5 * mp_ * v_ * v_;
     return mp_ * (vBefore - v_) / dt;

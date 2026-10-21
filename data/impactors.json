@@ -350,6 +350,29 @@
       }
     },
     {
+      "id": "bmg_50",
+      "name": ".50 BMG ball",
+      "category": "ballistic",
+      "description": "12.7 x 99 mm heavy machine-gun round: a 708 gr (45.9 g) full metal jacket bullet at UL 752 Level 10 velocity, about five times the energy of a 7.62 mm rifle round.",
+      "kind": "projectile",
+      "mass_g": 45.9,
+      "radius_mm": 6.5,
+      "length_mm": 58,
+      "youngs_GPa": 60,
+      "poisson": 0.35,
+      "density_kgm3": 9000,
+      "yield_MPa": 600,
+      "speed_ms": 900,
+      "min_speed_ms": 300,
+      "max_speed_ms": 950,
+      "provenance": {
+        "mass_g": "published: UL 752 Level 10, .50 caliber 708 gr (45.9 g) lead-core full metal jacket",
+        "speed_ms": "published: UL 752 Level 10, 2810-3091 ft/s (856-942 m/s)",
+        "radius_mm": "published: 0.510 in (12.95 mm) bullet diameter, about 2.3 in (58 mm) long",
+        "yield_MPa": "estimated: a long lead-and-steel core in a gilding-metal jacket, harder to flatten than a rifle ball"
+      }
+    },
+    {
       "id": "bird_4lb",
       "name": "Bird 1.8 kg (4 lb)",
       "category": "aviation",

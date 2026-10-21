@@ -75,6 +75,9 @@ struct GlazingDef {
     Real pressure = 0;              // Pa, static differential load (+ pushes toward the back face)
     Real frameGrip = 40;            // N/m of edge contact holding loose fragments
     Real bite = 0.012;              // m, frame rebate covering the pane edges
+    // N/m: the in-plane pull on its edge a laminate's frame resists before the
+    // edge slides out of the rebate (0: a sealant bond over the bite).
+    Real edgeHold = 0;
     std::map<std::string, std::string> provenance;
 
     Real thickness() const;

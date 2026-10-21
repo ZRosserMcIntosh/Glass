@@ -204,6 +204,7 @@ void readGlazing(const json::Value& o, std::vector<GlazingDef>& out, std::vector
     r.num("pressure_kPa", 1e3, g.pressure, -200, 200);
     r.num("frame_grip_Nm", 1, g.frameGrip, 0, 1e5);
     r.num("bite_mm", 1e-3, g.bite, 0, 50);
+    r.num("edge_hold_kNm", 1e3, g.edgeHold, 0, 5e3);
     r.provenance(g.provenance);
     const json::Value* plies = r.take("plies");
     if (!plies || !plies->isArray() || plies->items().empty()) {

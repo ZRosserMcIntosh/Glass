@@ -419,6 +419,51 @@ TEST_CASE("tiers: every tier gives the same outcome for the same shot") {
     }
 }
 
+TEST_CASE("UL 752: a .50 BMG defeats Level 8 but not Level 10") {
+    CHECK(shoot("ul752_l8", "bmg_50").report.penetrated);
+    const auto s = shoot("ul752_l10", "bmg_50", 942);  // the top of the Level 10 velocity range
+    CHECK(s.report.embedded);
+    CHECK(!s.report.penetrated);
+}
+
+// ---- Heavy shot on laminates ----------------------------------------------------------
+
+TEST_CASE("cannonball: rifle-rated glass is ripped out of its frame and goes with the ball") {
+    const auto s = shoot("ul752_l3", "cannonball_9lb", -1, 1);
+    const auto& lib = glstest::library();
+    const GlazingDef& g = *lib.glazing("ul752_l3");
+    std::cout << "    " << s.report.outcome << "\n";
+    CHECK(s.pane->pulledOut());
+    CHECK(s.report.penetrated);
+    CHECK(s.report.outcome.find("wrapped") != std::string::npos);
+    // Sharing its momentum with ~22 kg of glazing slows the 4 kg ball hard.
+    CHECK_RANGE(s.report.speedOut, 50, 150);
+    CHECK_NEAR(s.pane->status().openArea, g.width * g.height, 1e-9);
+    // The pieces go the ball's way.
+    int free = 0;
+    double vz = 0;
+    for (const auto& f : s.pane->fragments().fragments())
+        if (!f.retired && !f.chip && f.state != FragmentState::Held) ++free, vz += f.vel.z;
+    CHECK(free > 50);
+    CHECK(vz > 0);
+}
+
+TEST_CASE("cannonball: a thin interlayer tears round the ball; a bullet still plugs thick armour") {
+    // PVB a few mm thick cannot drag 24 kg of glass: it tears round the ball.
+    const auto l1 = shoot("ul752_l1", "cannonball_9lb", -1, 1);
+    CHECK(l1.pane->pulledOut());
+    CHECK(l1.report.outcome.find("disc of") != std::string::npos);
+    // A wide pane in a strong frame holds its edge; the polymer dishes round the ball and tears.
+    const auto v8 = shoot("armoured_windscreen_v8", "cannonball_9lb", -1, 1);
+    CHECK(!v8.pane->pulledOut());
+    CHECK(v8.report.penetrated);
+    CHECK(v8.pane->status().maxBulge > 0.05);
+    // Small-calibre rounds are unchanged: the polycarbonate plugs, the frame never notices.
+    const auto b = shoot("ul752_l3", "magnum_44", -1, 1);
+    CHECK(!b.pane->pulledOut());
+    CHECK(b.report.embedded);
+}
+
 // ---- Armoured glazing under fire --------------------------------------------------------
 
 namespace {

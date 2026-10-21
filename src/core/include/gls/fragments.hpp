@@ -91,6 +91,9 @@ public:
     // Makes the given (pane-aligned) pieces fall as one rigid slab.
     int makeClump(const std::vector<int>& members, const Vec3& vel, const Vec3& omega, Real time, Rng& rng);
     void dissolve(int clump, Real time, Rng& rng, Real spread);
+    // Breaks piece k along random lines, and its parts again, until each is
+    // under maxRadius (or the fragment budget runs out). Returns the parts.
+    std::vector<int> breakUp(int k, Real maxRadius, Rng& rng, Real time);
     std::vector<Clump>& clumps() { return clumps_; }
     const std::vector<FragmentLink>& links(int fragment) const;
     const std::vector<DiceSpray>& sprays() const { return sprays_; }

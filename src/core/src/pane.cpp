@@ -46,6 +46,15 @@ constexpr Real kMinTurnRadius = 0.1;       // m, tightest bend of a running (non
 constexpr Real kBlastActive = 200;         // Pa of blast pressure that counts as loading the pane
 constexpr Real kBlastHold = 1000;          // Pa above which a blast tears loose pieces from their hold
 constexpr Real kLaminateWedgeSupport = 0.15; // the same for wedges bonded to an interlayer
+// Behind crushed glass, a polymer stack thinner than this share of the
+// projectile's diameter dishes as a membrane instead of shearing out a plug
+// (thin-target behaviour, Backman & Goldsmith 1978).
+constexpr Real kMembraneRatio = 0.3;
+constexpr Real kEdgeBond = 1e6;            // Pa: a sealant bond at break over the bite (structural silicone ~0.7-1 MPa)
+constexpr Real kWrapPiece = 0.06;          // m: bonded glass folded round an impactor breaks to pieces this size
+constexpr Real kWrapLag = 0.35;            // the sheet's edges trail the impactor by this share of its speed
+constexpr Real kWrapFold = 0.3;            // and fold in toward its path at this share
+constexpr Real kWrapDisc = 2.0;            // the disc a tearing laminate wraps round an impactor, in rim radii
 constexpr int kMaxRings = 5;               // concentric rings per crack star
 constexpr Real kDormantCheck = 8e-6;       // s between looks at an arrested tip
 
@@ -530,6 +539,13 @@ void Pane::stepImpactor(int k, Real dt) {
             I.vel = I.axis * I.ballistic.speed();
             I.report.depth = std::max(I.report.depth, std::min(depth, T));
             I.report.bulge = I.ballistic.bulge();
+            if (I.ballistic.handedOff()) {
+                // The glass is rubble; the polymer behind it dishes round the projectile.
+                I.contactRadius = I.ballistic.projectileRadius();
+                startMembrane(k);
+                I.membraneZ0 = I.pos.z + I.side * I.nose;
+                return;
+            }
             if (I.ballistic.done()) {
                 I.report.absorbed = I.ballistic.absorbed();
                 I.report.contactTime = time_ + dt - I.report.contactStart;
@@ -574,7 +590,8 @@ void Pane::stepImpactor(int k, Real dt) {
         case ImpactorPhase::Membrane: {
             const Real noseZ = I.pos.z + I.side * I.nose;
             const Real delta = I.side * (noseZ - I.membraneZ0);
-            if (I.def.kind == ImpactorKind::Sphere || I.def.kind == ImpactorKind::SoftBody) {
+            if (I.def.kind == ImpactorKind::Sphere || I.def.kind == ImpactorKind::SoftBody ||
+                I.def.kind == ImpactorKind::Projectile) {
                 const Real R = I.def.radius, dd = std::min(std::max(delta, 0.0), R);
                 I.membrane.setRim(std::max(0.5 * R, std::sqrt(2 * R * dd - dd * dd)));
             }
@@ -599,6 +616,18 @@ void Pane::stepImpactor(int k, Real dt) {
             for (auto& b : bulges_)
                 if (b.impactor == k) b.depth = std::max(0.0, std::max(delta, 0.6 * I.membraneMax));
             I.report.bulge = std::max(I.report.bulge, delta);
+            // The membrane's tension falls off as 1/r out to the frame: if what
+            // reaches the nearest edge is more than the frame holds, the edge
+            // slides out of its rebate and the whole laminate goes.
+            if (!I.membrane.torn() && I.membrane.rimTension() > 0) {
+                const Real edge = std::max({I.membrane.outerRadius(),
+                                            std::min(std::min(I.hit.x, def_.width - I.hit.x), std::min(I.hit.y, def_.height - I.hit.y))});
+                const Real pull = I.membrane.rimTension() * I.membrane.rimRadius() / edge;
+                if (pull > edgeHold()) {
+                    pullOut(k, pull);
+                    return;
+                }
+            }
             if (I.membrane.torn()) {
                 I.phase = ImpactorPhase::Flight;
                 I.through = true;
@@ -746,7 +775,13 @@ void Pane::beginContact(int k) {
                 b.z1 = (I.side > 0 ? L.z1 : lam_.thickness - L.z0) / I.losCos;
                 layers.push_back(b);
             }
-            I.ballistic.configure(layers, I.def, sp, kMushroom);
+            // Polymer the projectile meets once the glass is crushed: plugged if
+            // thick beside it, dished as a membrane if thin.
+            Real polymer = 0;
+            for (const auto& L : lam_.layers)
+                if (L.kind != MaterialKind::Glass) polymer += L.z1 - L.z0;
+            const bool dish = !monolithic_ && polymer < kMembraneRatio * 2 * I.def.radius;
+            I.ballistic.configure(layers, I.def, sp, kMushroom, dish);
             I.phase = ImpactorPhase::Ballistic;
             // Back-spray: chips thrown back off the struck face.
             const GlassPly& gl = I.side > 0 ? glass_.front() : glass_.back();
@@ -1536,6 +1571,118 @@ void Pane::blowOut(Real p) {
     log(fmt("the blast tears %.0f loose pieces out of the frame", static_cast<double>(n)));
 }
 
+Real Pane::edgeHold() const { return def_.edgeHold > 0 ? def_.edgeHold : kEdgeBond * def_.bite; }
+
+// The laminate's edge has slid out of the frame: the sheet goes with the
+// impactor, folded round it, and its glass breaks into pieces where it folds.
+// Dragging the rest of the sheet up to speed over about its own radius takes
+// a rim tension of M u^2 / (2 L) / (2 pi a); if the polymer cannot carry that,
+// it tears round the impactor, which goes on wrapped in the disc it tore out,
+// and the rest of the sheet follows more slowly with what the polymer gave it
+// before it tore.
+void Pane::pullOut(int k, Real edgePull) {
+    Impactor& I = imp_[k];
+    pulledOut_ = true;
+    const Real m = I.def.mass, v0 = std::max(0.0, I.side * I.vel.z);
+    const Vec3 axis = I.side * I.vel.z > 0 ? normalize(I.vel) : Vec3{0, 0, static_cast<Real>(I.side)};
+    const Real rim = I.membrane.rimRadius(), strength = I.membrane.strength();
+    log(fmt("the laminate's edge pulls out of the frame (%.0f kN/m at the edge, the frame holds %.0f)", edgePull / 1e3,
+            edgeHold() / 1e3));
+    std::vector<int> pieces;
+    for (auto& G : glass_) {
+        CrackNetwork& net = G.net;
+        for (int t = 0; t < static_cast<int>(net.tips().size()); ++t)
+            if (net.tips()[t].alive) net.kill(t, time_);
+        const std::size_t before = frags_.fragments().size();
+        frags_.build(net, G.ply, 0.5 * (G.z0 + G.z1), G.z1 - G.z0, G.mat->density, time_);
+        G.builtRevision = net.topology();
+        G.fragmented = true;
+        if (G.originTime < 0) { G.origin = I.hit; G.originTime = time_; }
+        const std::size_t built = frags_.fragments().size();
+        for (std::size_t i = before; i < built; ++i)
+            if (!frags_.fragments()[i].chip)
+                for (const int part : frags_.breakUp(static_cast<int>(i), kWrapPiece, rng_, time_)) pieces.push_back(part);
+        std::vector<std::uint32_t> crushed;
+        for (std::size_t c = 0; c < net.grid().size(); ++c)
+            if ((net.grid()[c] & CrackNetwork::kCrush) && !(net.grid()[c] & CrackNetwork::kRemoved))
+                crushed.push_back(static_cast<std::uint32_t>(c));
+        net.markRemovedCells(crushed);
+    }
+    // Each piece's share of the speed: the sheet's edges trail.
+    Real rMax = 1e-3;
+    for (const int i : pieces) rMax = std::max(rMax, length(frags_.fragments()[i].origin - I.hit));
+    std::vector<Real> share(pieces.size());
+    std::vector<char> inner(pieces.size());
+    const Real disc = kWrapDisc * rim;
+    Real glassIn = 0, glassOut = 0, pIn = 0, pOut = 0;  // mass, and momentum per unit speed
+    for (std::size_t n = 0; n < pieces.size(); ++n) {
+        const Fragment& f = frags_.fragments()[pieces[n]];
+        const Real r = length(f.origin - I.hit);
+        share[n] = 1 - kWrapLag * sq(r / rMax);
+        inner[n] = r < disc;
+        (inner[n] ? glassIn : glassOut) += f.mass;
+        (inner[n] ? pIn : pOut) += f.mass * share[n];
+    }
+    // The polymer goes with the glass it is bonded to.
+    const Real sheetMass = lam_.massPerArea * def_.width * def_.height;
+    const Real discArea = std::min(kPi * disc * disc, def_.width * def_.height);
+    const Real polyArea = std::max(0.0, sheetMass - glassIn - glassOut) / (def_.width * def_.height);
+    const Real inMass = glassIn + polyArea * discArea, outMass = glassOut + polyArea * (def_.width * def_.height - discArea);
+    pIn += polyArea * discArea * (glassIn > 0 ? pIn / glassIn : 1);
+    pOut += polyArea * (def_.width * def_.height - discArea) * (glassOut > 0 ? pOut / glassOut : 1);
+    // Wrapped whole: everything shares the impactor's momentum.
+    Real u = m * v0 / (m + pIn + pOut), uOut = u;
+    const Real need = outMass * u * u / (2 * rMax) / (2 * kPi * rim);
+    const bool tore = need > strength;
+    if (tore) {
+        // The rim pulls the outer sheet with all the polymer has until it tears.
+        uOut = u * std::sqrt(strength / need);
+        u = std::max(0.0, (m * v0 - pOut * uOut) / (m + pIn));
+    }
+    for (std::size_t n = 0; n < pieces.size(); ++n) {
+        Fragment& f = frags_.fragments()[pieces[n]];
+        const Vec2 d = f.origin - I.hit;
+        const Real r = length(d), rho = r / rMax, sp = inner[n] ? u : uOut;
+        const Vec2 in = r > 1e-9 ? d * (-1 / r) : Vec2{};
+        // Folding in round the impactor's path; a torn-off sheet only flaps.
+        const Real fold = (inner[n] || !tore ? kWrapFold : 0.3 * kWrapFold) * sp * rho;
+        f.vel = axis * (sp * share[n]) + Vec3{in.x, in.y, 0} * fold +
+                Vec3{rng_.uniform(-0.03, 0.03), rng_.uniform(-0.03, 0.03), rng_.uniform(-0.03, 0.03)} * sp;
+        f.omega = {rng_.uniform(-30, 30), rng_.uniform(-30, 30), rng_.uniform(-15, 15)};
+        releaseFragment(pieces[n]);
+    }
+    for (auto& sh : sheets_) sh.sync(frags_);
+    I.vel = axis * u;
+    I.force = 0;
+    I.phase = ImpactorPhase::Flight;
+    I.through = true;
+    I.report.penetrated = true;
+    I.report.speedOut = u;
+    I.report.contactTime = time_ - I.report.contactStart;
+    I.report.absorbed = I.report.energyIn - 0.5 * m * u * u;
+    if (!tore) {
+        I.report.outcome = fmt("Ripped the whole window out of its frame: the laminate wrapped round it and went with "
+                               "it at %.0f m/s",
+                               u);
+    } else {
+        holes_.push_back({I.hit, disc, I.vel});
+        I.report.outcome =
+            uOut > 0.8 * u
+                ? fmt("Ripped the window out of its frame; the laminate split round it as it wrapped: on at %.0f m/s "
+                      "in a %.0f cm disc of it, the rest of the window right behind at %.0f m/s",
+                      u, 200 * disc, uOut)
+                : fmt("Ripped the window out of its frame and tore through it: on at %.0f m/s wrapped in a %.0f cm "
+                      "disc of laminate, the rest of the window after it at %.0f m/s",
+                      u, 200 * disc, uOut);
+    }
+    bulges_.erase(std::remove_if(bulges_.begin(), bulges_.end(), [k](const Bulge& b) { return b.impactor == k; }),
+                  bulges_.end());
+    lastDynamic_ = time_;
+    log(fmt("%.0f kg of glazing out of the frame; dragging it needs %.0f kN/m at the rim, the polymer carries %.0f",
+            sheetMass, need / 1e3, strength / 1e3));
+    log(I.report.outcome);
+}
+
 // ---- Fragments ----------------------------------------------------------------------------------
 
 void Pane::releaseFragment(int index) {
@@ -1776,7 +1923,7 @@ PaneStatus Pane::status() const {
     // Laminates keep their interlayer: only torn holes are open.
     Real holeArea = 0;
     for (const auto& h : holes_) holeArea += kPi * h.r * h.r;
-    s.openArea = monolithic_ ? maxRemoved : std::min(area, holeArea);
+    s.openArea = monolithic_ ? maxRemoved : pulledOut_ ? area : std::min(area, holeArea);
     for (const auto& I : imp_) s.penetrated = s.penetrated || I.report.penetrated;
     s.barrierIntact = s.openArea < 1e-5 && !s.penetrated;
     s.crackedFraction = std::min(1.0, maxCracked * 8);

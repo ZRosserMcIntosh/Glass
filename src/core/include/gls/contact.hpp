@@ -98,9 +98,12 @@ public:
     // Out-of-plane force (N) at deflection delta (m) of the rim; updates tearing.
     Real force(Real delta);
     bool torn() const;
+    // N/m the intact plies carry at their tensile strength.
+    Real strength() const;
     // The impactor wraps the membrane as it goes deeper: the rim grows.
     void setRim(Real r) { Rc_ = clampr(r, 1e-3, 0.95 * Rm_); }
     Real rimStrain() const { return rimStrain_; }
+    Real rimTension() const { return rimTension_; }  // N/m at the rim, from the last force()
     Real outerRadius() const { return Rm_; }
     Real rimRadius() const { return Rc_; }
     // Membrane deflection (m) at radius r from the centre for rim deflection delta.
@@ -112,7 +115,7 @@ private:
     void tabulate();
     std::vector<MembranePly> plies_;
     std::vector<Real> tabE_, tabN_;
-    Real Rc_ = 0.02, Rm_ = 0.2, stiff_ = 1, conc_ = 1, rimStrain_ = 0;
+    Real Rc_ = 0.02, Rm_ = 0.2, stiff_ = 1, conc_ = 1, rimStrain_ = 0, rimTension_ = 0;
 };
 
 // Layered ballistic penetration. The projectile crushes a cone in each glass
@@ -120,6 +123,13 @@ private:
 // drives ahead, pays the comminution energy, and mushrooms if soft. Interlayers
 // add mass and tearing energy; a polymer backing absorbs the column as a
 // membrane until it perforates. Returns forces for the plate model as it goes.
+//
+// A projectile wide beside the polymer it meets (a cannonball on bullet-
+// resistant glass) does not punch a plug out of it: the polymer dishes over a
+// wide area instead. Configured with membraneBacking, the model crushes the
+// glass, lets the thin polymer between the glass plies ride along, and hands
+// over (handedOff()) where only polymer is left, for the pane to pull it as a
+// membrane.
 struct BallisticLayer {
     int ply = 0;
     Real z0 = 0, z1 = 0;
@@ -138,10 +148,12 @@ public:
         Real speed = 0;
     };
 
-    void configure(const std::vector<BallisticLayer>& layers, const ImpactorDef& p, Real speed, Real mushroomFactor);
+    void configure(const std::vector<BallisticLayer>& layers, const ImpactorDef& p, Real speed, Real mushroomFactor,
+                   bool membraneBacking = false);
     // Advances dt; returns the force on the laminate (N, + into the pane).
     Real step(Real dt, Real time);
-    bool done() const { return stopped_ || exited_; }
+    bool done() const { return stopped_ || exited_ || handedOff_; }
+    bool handedOff() const { return handedOff_; }
     bool stopped() const { return stopped_; }
     bool exited() const { return exited_; }
     Real speed() const { return v_; }
@@ -162,7 +174,7 @@ private:
     Real v_ = 0, depth_ = 0, mcol_ = 0, r_ = 0, glassDepth_ = 0, absorbed_ = 0, bulge_ = 0;
     Real mushroom_ = 1, backingTravel_ = 0;
     int layer_ = -1;
-    bool stopped_ = false, exited_ = false;
+    bool stopped_ = false, exited_ = false, membrane_ = false, handedOff_ = false;
 };
 
 }  // namespace gls
