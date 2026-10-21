@@ -463,6 +463,27 @@
         "mass_g": "estimated: notched-coil or pre-formed fragments of an M67-class grenade, about 0.1-0.3 g",
         "speed_ms": "estimated: Gurney velocity of a thin steel case on Composition B, about 1.2-1.6 km/s"
       }
+    },
+    {
+      "id": "cannonball_9lb",
+      "name": "9-pounder cannonball",
+      "category": "artillery",
+      "description": "Round shot of a Revolutionary War field gun: a 4 kg cast-iron ball fired at about the speed of sound.",
+      "kind": "sphere",
+      "mass_g": 4080,
+      "radius_mm": 51,
+      "youngs_GPa": 170,
+      "poisson": 0.26,
+      "density_kgm3": 7200,
+      "yield_MPa": 600,
+      "speed_ms": 440,
+      "min_speed_ms": 30,
+      "max_speed_ms": 500,
+      "provenance": {
+        "mass_g": "published: a 9-pounder's nominal 9 lb (4.08 kg) iron round shot, about 4 in (102 mm) across",
+        "speed_ms": "estimated: smoothbore field guns of the period, about 1,400-1,500 ft/s with a full charge",
+        "yield_MPa": "estimated: grey cast iron in compression"
+      }
     }
   ]
 }
