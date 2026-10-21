@@ -375,6 +375,44 @@
       }
     },
     {
+      "id": "annealed_10",
+      "name": "Annealed plate, 10 mm",
+      "category": "architectural",
+      "description": "An old shopfront's plate glass: big, heavy and plain annealed. Breaks into long blades and guillotine shards.",
+      "standard": "EN 572-2 / ASTM C1036",
+      "width_m": 1.1,
+      "height_m": 2.55,
+      "damping": 0.01,
+      "frame_grip_Nm": 60,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 10, "treatment": "annealed" }
+      ],
+      "provenance": {
+        "width_m": "estimated: a floor-to-ceiling shopfront panel between mullions",
+        "frame_grip_Nm": "estimated: gasket and bead friction holding a loose shard by its edge"
+      }
+    },
+    {
+      "id": "laminated_10_76",
+      "name": "Laminated storefront 5 / 0.76 PVB / 5",
+      "category": "architectural",
+      "description": "Two 5 mm plies on a thick PVB interlayer: it cracks, but the broken glass stays on the film and in the frame.",
+      "standard": "EN 14449 / EN 12600 / ANSI Z97.1",
+      "width_m": 1.1,
+      "height_m": 2.55,
+      "damping": 0.04,
+      "frame_grip_Nm": 200,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 5, "treatment": "annealed" },
+        { "material": "pvb", "thickness_mm": 0.76 },
+        { "material": "soda_lime_float", "thickness_mm": 5, "treatment": "annealed" }
+      ],
+      "provenance": {
+        "plies": "published: a common laminated shopfront layup, 10.76 mm",
+        "width_m": "estimated: a floor-to-ceiling shopfront panel between mullions"
+      }
+    },
+    {
       "id": "armoured_side_glass",
       "name": "Armoured car side glass, 32 mm glass-clad polycarbonate",
       "category": "security",

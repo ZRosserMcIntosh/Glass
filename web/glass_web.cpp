@@ -219,6 +219,20 @@ GLS_EXPORT int gls_new_pane(int glazing, int tier, double seed) {
     return 1;
 }
 
+// The same glazing cut to another size (a building's openings): width and
+// height in m.
+GLS_EXPORT int gls_new_pane_sized(int glazing, int tier, double seed, double width, double height) {
+    Sim& S = sim();
+    if (glazing < 0 || glazing >= static_cast<int>(S.lib.glazings.size())) return 0;
+    if (!(width >= 0.02 && width <= 6 && height >= 0.02 && height <= 6)) return 0;
+    GlazingDef d = S.lib.glazings[glazing];
+    d.width = width;
+    d.height = height;
+    S.glazing = glazing;
+    S.pane = std::make_unique<Pane>(d, budgetForTier(tier), static_cast<std::uint64_t>(std::max(0.0, seed)));
+    return 1;
+}
+
 // Several panes side by side (a building's windows): `slot` 0..31 picks the
 // pane every other call works on; each slot keeps its own pane and clock.
 GLS_EXPORT int gls_select(int slot) {
