@@ -426,7 +426,7 @@
       "id": "hand_grenade",
       "name": "Hand grenade (thrown)",
       "category": "explosive",
-      "description": "A 400 g steel-bodied fragmentation grenade thrown hard, before it goes off: a heavy, blunt steel ball.",
+      "description": "A 400 g steel-bodied fragmentation grenade. In the glass lab it goes off 1.5 s after the throw, wherever it has got to: its steel, then its blast wave. Lobbed, it bounces off tempered glass and goes off at the foot of the pane; thrown hard, it goes through first.",
       "kind": "sphere",
       "mass_g": 400,
       "radius_mm": 32,
@@ -434,13 +434,13 @@
       "poisson": 0.3,
       "density_kgm3": 7850,
       "yield_MPa": 900,
-      "speed_ms": 20,
+      "speed_ms": 7,
       "min_speed_ms": 3,
       "max_speed_ms": 35,
       "provenance": {
         "mass_g": "published: M67 fragmentation grenade, 14 oz (400 g), 2.5 in (64 mm) diameter",
         "yield_MPa": "estimated: hard drawn-steel body",
-        "speed_ms": "estimated: a hard overarm throw at short range"
+        "speed_ms": "estimated: a lob against the glass (a hard overarm throw is about 20 m/s)"
       }
     },
     {
@@ -484,6 +484,27 @@
         "mass_g": "published: a 9-pounder's nominal 9 lb (4.08 kg) iron round shot, about 4 in (102 mm) across",
         "speed_ms": "estimated: smoothbore field guns of the period, about 1,400-1,500 ft/s with a full charge",
         "yield_MPa": "estimated: grey cast iron in compression"
+      }
+    },
+    {
+      "id": "grenade_40mm",
+      "name": "40 mm HE grenade (impact-fused)",
+      "category": "explosive",
+      "description": "A grenade-launcher round: 230 g, fired at 76 m/s, goes off the instant it touches something. In the glass lab it bursts against the pane: about 32 g of explosive and a few hundred steel fragments at point-blank range.",
+      "kind": "sphere",
+      "mass_g": 230,
+      "radius_mm": 20,
+      "youngs_GPa": 70,
+      "poisson": 0.33,
+      "density_kgm3": 2700,
+      "yield_MPa": 300,
+      "speed_ms": 76,
+      "min_speed_ms": 40,
+      "max_speed_ms": 80,
+      "provenance": {
+        "mass_g": "published: M406 40 x 46 mm HE cartridge projectile, about 230 g, 32 g Composition B",
+        "speed_ms": "published: M79 / M203 muzzle velocity, 76 m/s",
+        "yield_MPa": "estimated: an aluminium-bodied projectile"
       }
     }
   ]

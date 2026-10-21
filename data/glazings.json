@@ -281,6 +281,60 @@
       }
     },
     {
+      "id": "storefront_tempered_10",
+      "name": "Storefront panel, fully tempered 10 mm",
+      "category": "architectural",
+      "description": "A floor-to-ceiling shop window: one big sheet of fully tempered glass.",
+      "standard": "EN 12150-1 / ASTM C1048 / ANSI Z97.1",
+      "width_m": 1.1,
+      "height_m": 2.55,
+      "damping": 0.01,
+      "frame_grip_Nm": 40,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 10, "treatment": "fully_tempered", "surface_compression_MPa": 100 }
+      ],
+      "provenance": {
+        "plies": "published: fully tempered surface compression 69-150 MPa (ASTM C1048); typical production ~100 MPa",
+        "width_m": "estimated: a floor-to-ceiling storefront panel between mullions"
+      }
+    },
+    {
+      "id": "glass_door_10",
+      "name": "Glass door, fully tempered 10 mm",
+      "category": "architectural",
+      "description": "A frameless shop door: fully tempered, as safety glazing in doors must be.",
+      "standard": "EN 12150-1 / ASTM C1048 / ANSI Z97.1",
+      "width_m": 0.95,
+      "height_m": 2.1,
+      "damping": 0.01,
+      "frame_grip_Nm": 40,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 10, "treatment": "fully_tempered", "surface_compression_MPa": 100 }
+      ],
+      "provenance": {
+        "plies": "published: fully tempered surface compression 69-150 MPa (ASTM C1048); typical production ~100 MPa",
+        "width_m": "estimated: a frameless shop door leaf"
+      }
+    },
+    {
+      "id": "transom_tempered_6",
+      "name": "Transom over a door, fully tempered 6 mm",
+      "category": "architectural",
+      "description": "The small fixed panel above a shop door.",
+      "standard": "EN 12150-1 / ASTM C1048 / ANSI Z97.1",
+      "width_m": 0.95,
+      "height_m": 0.45,
+      "damping": 0.01,
+      "frame_grip_Nm": 40,
+      "plies": [
+        { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "fully_tempered", "surface_compression_MPa": 100 }
+      ],
+      "provenance": {
+        "plies": "published: fully tempered surface compression 69-150 MPa (ASTM C1048); typical production ~100 MPa",
+        "width_m": "estimated: the transom above a 2.1 m door"
+      }
+    },
+    {
       "id": "armoured_side_glass",
       "name": "Armoured car side glass, 32 mm glass-clad polycarbonate",
       "category": "security",
