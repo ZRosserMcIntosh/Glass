@@ -225,7 +225,10 @@ int FragmentSystem::build(const CrackNetwork& net, int ply, Real zMid, Real thic
     {
         int newCount = 0;
         for (int r = 0; r < regions; ++r) newCount += isNew[r] && count[r] > 0;
-        const int room = std::max(1, maxFragments - static_cast<int>(frags_.size()) - std::max(8, maxFragments / 20));
+        // Pieces in play: a retired record (split into others) is not one.
+        int live = 0;
+        for (const auto& f : frags_) live += !f.retired;
+        const int room = std::max(1, maxFragments - live - std::max(8, maxFragments / 20));
         if (newCount > room) {
             std::vector<int> parent(regions);
             for (int r = 0; r < regions; ++r) parent[r] = r;

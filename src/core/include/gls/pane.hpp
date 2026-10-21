@@ -257,6 +257,7 @@ private:
     void releaseFragment(int index);
     void blowOut(Real p);
     void pullOut(int k, Real edgePull);
+    bool breakUnderBlast(int g, Real p, std::size_t from);
     Real rateFactor(Real loadTime) const;
     Real nearFieldAt(Vec2 p) const;
     PlaneStress stressFromCurvature(int g, bool back, const Curvature& k, Real extraIso, bool layered = false) const;

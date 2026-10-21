@@ -585,6 +585,28 @@ TEST_CASE("blast: a weak blast leaves a tempered window whole") {
     CHECK(!p.status().cracked);
 }
 
+TEST_CASE("blast: a storefront of annealed plate comes out in pieces, not sheets") {
+    // A room blast on a 1.1 x 2.55 m pane of 10 mm annealed plate. The gas keeps
+    // pushing on the broken glass, so no piece much longer than
+    // h sqrt(sigma / 3p) (about 40 cm here) holds together.
+    const auto& lib = glstest::library();
+    for (int tier : {1, 2}) {
+        GlazingDef g = *lib.glazing("annealed_10");
+        Pane p(g, budgetForTier(tier), 7);
+        BlastLoad b;
+        b.arrival = 1e-3, b.peak = 70e3, b.duration = 2.4e-3, b.decay = 1.5, b.gasPeak = 25e3, b.gasRise = 2e-3, b.gasTau = 0.25;
+        p.blast(b);
+        p.advance(0.05);
+        int pieces = 0;
+        double biggest = 0;
+        for (const auto& f : p.fragments().fragments())
+            if (!f.retired && !f.chip) ++pieces, biggest = std::max(biggest, f.radius);
+        std::cout << "    tier " << tier << ": " << pieces << " pieces, largest " << 200 * biggest << " cm across\n";
+        CHECK(pieces > 100);
+        CHECK(biggest < 0.3);
+    }
+}
+
 TEST_CASE("blast: a grenade through the window, then the blast clears what was left in the frame") {
     const auto& lib = glstest::library();
     const GlazingDef& g = *lib.glazing("tempered_6");

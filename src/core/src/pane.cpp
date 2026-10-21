@@ -1627,7 +1627,7 @@ void Pane::pullOut(int k, Real edgePull) {
     const Real sheetMass = lam_.massPerArea * def_.width * def_.height;
     const Real discArea = std::min(kPi * disc * disc, def_.width * def_.height);
     const Real polyArea = std::max(0.0, sheetMass - glassIn - glassOut) / (def_.width * def_.height);
-    const Real inMass = glassIn + polyArea * discArea, outMass = glassOut + polyArea * (def_.width * def_.height - discArea);
+    const Real outMass = glassOut + polyArea * (def_.width * def_.height - discArea);
     pIn += polyArea * discArea * (glassIn > 0 ? pIn / glassIn : 1);
     pOut += polyArea * (def_.width * def_.height - discArea) * (glassOut > 0 ? pOut / glassOut : 1);
     // Wrapped whole: everything shares the impactor's momentum.
@@ -1720,7 +1720,23 @@ void Pane::freezeCheck() {
         if (pressing) continue;
         net.killDormant(time_);
         const std::size_t before = frags_.fragments().size();
-        const int added = frags_.build(net, G.ply, 0.5 * (G.z0 + G.z1), G.z1 - G.z0, G.mat->density, time_);
+        // A blast still pushing on broken glass that is not tempered keeps
+        // breaking it (below): keep part of the piece budget for that, the
+        // finest chips round the origins merging into their neighbours instead.
+        const Real pBlast = G.dicing || blastOnset_ < 0 ? 0.0
+            : std::max(std::fabs(blastPressure(time_)), std::fabs(blastPressure(std::max(G.originTime, blastOnset_))));
+        const int cap = frags_.maxFragments;
+        if (pBlast > kBlastHold) frags_.maxFragments = cap - (cap - static_cast<int>(before)) / 4;
+        int added = frags_.build(net, G.ply, 0.5 * (G.z0 + G.z1), G.z1 - G.z0, G.mat->density, time_);
+        frags_.maxFragments = cap;
+        if (pBlast > kBlastHold) {
+            const Real p = pBlast;
+            for (int pass = 0; pass < 10 && p > kBlastHold && breakUnderBlast(static_cast<int>(&G - glass_.data()), p, before); ++pass)
+                frags_.build(net, G.ply, 0.5 * (G.z0 + G.z1), G.z1 - G.z0, G.mat->density, time_);
+            added = 0;
+            for (std::size_t i = before; i < frags_.fragments().size(); ++i)
+                added += !frags_.fragments()[i].retired && !frags_.fragments()[i].chip;
+        }
         G.builtRevision = net.topology();
         G.fragmented = true;
         // Crushed glass falls out as grit.
@@ -1839,6 +1855,94 @@ void Pane::freezeCheck() {
         else
             log(fmt("ply cut into %.0f pieces: %.0f fall, %.0f stay in the frame", added, freed, held));
     }
+}
+
+// Glass a blast is still pushing on keeps breaking after its first cracks: a
+// piece held by the frame or by the pieces round it bends as a cantilever
+// under the pressure, sigma = 3 p L^2 / h^2, so none much longer than
+// L = h sqrt(sigma_f / 3p) holds together. Each piece cut since `from` that is
+// longer is cracked across its long axis, through its centroid, the crack
+// wandering a little until it meets another or an edge. Returns whether it
+// cracked any (the ply is then cut into pieces again).
+bool Pane::breakUnderBlast(int g, Real p, std::size_t from) {
+    GlassPly& G = glass_[g];
+    CrackNetwork& net = G.net;
+    const Real h = G.z1 - G.z0, cell = net.cell();
+    const Real strength = G.mat->weibullScale * rateFactor(time_ - blastOnset_) + G.surfaceCompression;
+    const Real L = std::max(6 * cell, h * std::sqrt(strength / (3 * p)));
+    const std::uint32_t group = net.newGroup();
+    int cracks = 0;
+    for (std::size_t i = from; i < frags_.fragments().size(); ++i) {
+        const Fragment& f = frags_.fragments()[i];
+        if (f.retired || f.chip || f.ply != G.ply || f.bornAt != time_) continue;
+        // Its long axis, from the outline's spread about the centroid.
+        Real sxx = 0, syy = 0, sxy = 0;
+        for (const Vec2& q : f.outline) sxx += q.x * q.x, syy += q.y * q.y, sxy += q.x * q.y;
+        const Real ang = 0.5 * std::atan2(2 * sxy, sxx - syy);
+        Real lo = 0, hi = 0;
+        for (const Vec2& q : f.outline) {
+            const Real s = q.x * std::cos(ang) + q.y * std::sin(ang);
+            lo = std::min(lo, s), hi = std::max(hi, s);
+        }
+        if (hi - lo <= L) continue;
+        // Across the long axis, from a cell well inside the piece in the middle
+        // of its length (a bent piece's middle can lie outside it, and a cut
+        // started at its rim may not cross it).
+        const auto& m = frags_.maps[G.ply];
+        const Vec2 ax{std::cos(ang), std::sin(ang)};
+        const int i0 = std::max(0, static_cast<int>((f.origin.x - f.radius) / m.cell)), i1 = std::min(m.nx - 1, static_cast<int>((f.origin.x + f.radius) / m.cell));
+        const int j0 = std::max(0, static_cast<int>((f.origin.y - f.radius) / m.cell)), j1 = std::min(m.ny - 1, static_cast<int>((f.origin.y + f.radius) / m.cell));
+        Vec2 at;
+        int seen = 0;
+        for (const Real band : {0.2, 0.5}) {
+            for (int jj = j0; jj <= j1; ++jj)
+                for (int ii = i0; ii <= i1; ++ii) {
+                    if (m.label[static_cast<std::size_t>(jj) * m.nx + ii] != static_cast<int>(i)) continue;
+                    const Vec2 c{(ii + 0.5) * m.cell, (jj + 0.5) * m.cell};
+                    const Real u = (dot(c - f.origin, ax) - lo) / (hi - lo);
+                    if (std::fabs(u - 0.5) > band || !net.glassAt(c) || net.crackedNear(c, 2 * cell)) continue;
+                    if (rng_.uniform() * ++seen < 1) at = c;  // one at random
+                }
+            if (seen) break;
+        }
+        if (!seen) continue;
+        const Real a = ang + 0.5 * kPi + rng_.uniform(-0.25, 0.25);
+        for (const Real sgn : {1.0, -1.0}) {
+            // Across to the piece's edge: a crack it meets that only runs into
+            // the piece (a dead end) does not stop the cut, which carries on
+            // beyond it while the glass there is still this piece.
+            Vec2 start = at, dir = Vec2{std::cos(a), std::sin(a)} * sgn;
+            for (int leg = 0; leg < 24; ++leg) {
+                const int t = net.spawn(start, dir, time_, CrackKind::Concentric, group, 0, G.mat->crackSpeed);
+                if (t < 0) break;
+                for (int k = 0; k < 20000 && net.tips()[t].alive; ++k) {
+                    CrackTip& tip = net.tips()[t];
+                    tip.dir = rotate(tip.dir, rng_.normal() * 0.035);
+                    if (!net.advance(t, tip.pos + tip.dir * cell, time_)) break;
+                }
+                if (net.tips()[t].alive) net.kill(t, time_);
+                const Vec2 end = net.tips()[t].pos;
+                dir = net.tips()[t].dir;
+                // Past what stopped it (a dead-end crack, or another piece the
+                // sheet wraps round): wherever the line is in this piece again.
+                bool on = false;
+                const int reach = static_cast<int>((hi - lo) / cell) + 2;
+                for (int s = 1; s <= reach && !on; ++s) {
+                    const Vec2 q = end + dir * (s * cell);
+                    if (q.x < 0 || q.y < 0 || q.x > def_.width || q.y > def_.height) break;
+                    if (frags_.fragmentAt(G.ply, q) == static_cast<int>(i) && net.glassAt(q) && !net.crackedNear(q, 0.1 * cell))
+                        start = q, on = true;
+                }
+                if (!on) break;
+            }
+        }
+        ++cracks;
+    }
+    net.compactTips();
+    if (cracks)
+        log(fmt("the blast keeps breaking ply %.0f: %.0f pieces longer than %.0f cm cracked across", g + 1.0,
+                static_cast<double>(cracks), 100 * L));
+    return cracks > 0;
 }
 
 // ---- Outputs --------------------------------------------------------------------------------------
