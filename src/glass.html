@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glass Cockpit</title>
+<meta name="description" content="PFD, ND and EICAS for the Aviation Dynamics business jets, driven by the flight core compiled to WebAssembly.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef0f3; --surface: #ffffff; --surface-2: #f4f5f7; --ink: #15181d; --ink-2: #4a5160; --line: #d4d8df;
+    --accent: #0a6cc2; --accent-ink: #ffffff; --bezel: #23262b; --warn: #d92b2b; --caution: #e09b00;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1013; --surface: #171a1f; --surface-2: #1f232a; --ink: #e8eaee; --ink-2: #9aa2b1; --line: #2c313a;
+      --accent: #4aa3ff; --accent-ink: #06121f; --bezel: #050608; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1013; --surface: #171a1f; --surface-2: #1f232a; --ink: #e8eaee; --ink-2: #9aa2b1; --line: #2c313a;
+    --accent: #4aa3ff; --accent-ink: #06121f; --bezel: #050608; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4 "Roboto Condensed", "Arial Narrow", system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; padding: 14px 16px 6px; }
+  h1 { margin: 0; font-size: 1.3rem; font-weight: 700; letter-spacing: 0.02em; }
+  header p { margin: 0; color: var(--ink-2); }
+  main { padding: 0 16px 24px; display: grid; gap: 12px; }
+  .panel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; background: var(--bezel); padding: 10px; border-radius: 12px; }
+  .du { position: relative; aspect-ratio: 800 / 820; background: #000; border-radius: 6px; overflow: hidden; }
+  .du.eicas { aspect-ratio: 600 / 820; }
+  .du canvas { width: 100%; height: 100%; display: block; }
+  .masters { position: absolute; bottom: 8px; right: 8px; display: flex; gap: 6px; }
+  .master { font: 700 0.72rem "Roboto Condensed", sans-serif; letter-spacing: 0.04em; border-radius: 4px; padding: 5px 8px; cursor: pointer;
+            background: #1a1c20; border: 1px solid #333; color: #555; }
+  .master.warning.lit { background: var(--warn); color: #fff; border-color: #ff8a80; }
+  .master.caution.lit { background: var(--caution); color: #111; border-color: #ffd27a; }
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+  .card h2 { margin: 0; font-size: 0.95rem; color: var(--ink-2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+  label { display: grid; gap: 3px; color: var(--ink-2); font-size: 0.9rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  select, input[type="number"], button { font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; max-width: 100%; }
+  input[type="number"] { width: 7em; }
+  button { cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .keys { margin: 0; padding-left: 1.1em; color: var(--ink-2); font-size: 0.9rem; }
+  kbd { font: 0.82rem "Roboto Mono", ui-monospace, monospace; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--ink); }
+  #status { color: var(--warn); margin: 0; }
+  footer { padding: 0 16px 20px; color: var(--ink-2); font-size: 0.85rem; }
+  @media (max-width: 900px) { .panel { grid-template-columns: 1fr; } .du { max-width: 560px; margin: 0 auto; width: 100%; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Glass Cockpit</h1>
+  <p>PFD, ND and EICAS on the Aviation Dynamics flight core</p>
+</header>
+<main>
+  <p id="status">Starting the flight core…</p>
+  <section class="panel" aria-label="Flight displays">
+    <div class="du"><canvas id="pfd" aria-label="Primary flight display"></canvas></div>
+    <div class="du"><canvas id="nd" aria-label="Navigation display"></canvas></div>
+    <div class="du eicas"><canvas id="eicas" aria-label="Engine indication and crew alerting"></canvas>
+      <div class="masters">
+        <button class="master warning" id="master-warning" title="Acknowledge (Enter)">MASTER WARNING</button>
+        <button class="master caution" id="master-caution" title="Acknowledge (Enter)">MASTER CAUTION</button>
+      </div>
+    </div>
+  </section>
+  <section class="controls">
+    <div class="card">
+      <h2>Flight</h2>
+      <label>Aircraft <select id="aircraft"></select></label>
+      <label>Start <select id="spawn"></select></label>
+      <label>Destination <select id="destination"></select></label>
+      <div class="row"><button id="reset">Restart (R)</button><button id="pause" aria-pressed="false">Pause (Esc)</button><span>Thrust levers <b id="thr"></b></span></div>
+    </div>
+    <div class="card">
+      <h2>Flight guidance panel</h2>
+      <label>Selected altitude (ft) <input type="number" id="sel-alt" step="100" min="0" max="51000"></label>
+      <div class="row">
+        <label>Minimums (ft) <input type="number" id="mins" step="10" min="0"></label>
+        <label>Type <select id="mins-kind"><option value="BARO">BARO</option><option value="RA">RA</option></select></label>
+      </div>
+      <label>Navigation source <select id="nav-src"><option value="AUTO">Auto</option><option value="GPS">GPS</option><option value="LOC">LOC</option><option value="VOR">VOR</option></select></label>
+      <div class="row"><span>Baro</span><button id="baro-dn">−</button><button id="baro-up">+</button><button id="baro-std">STD</button></div>
+      <div class="row"><span>ND range</span><button id="range-dn">−</button><b id="range"></b><button id="range-up">+</button></div>
+      <label class="row"><input type="checkbox" id="speech"> Spoken callouts</label>
+    </div>
+    <div class="card">
+      <h2>Keys</h2>
+      <ul class="keys">
+        <li><kbd>W</kbd><kbd>S</kbd>/<kbd>↑</kbd><kbd>↓</kbd> pitch, <kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> roll, <kbd>Q</kbd><kbd>E</kbd> rudder/tiller</li>
+        <li><kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> thrust 10–100 %, <kbd>+</kbd><kbd>−</kbd> fine; <kbd>[</kbd><kbd>]</kbd> trim</li>
+        <li><kbd>G</kbd> gear, <kbd>F</kbd>/<kbd>V</kbd> flaps down/up, <kbd>B</kbd>/<kbd>N</kbd> speedbrake out/in</li>
+        <li><kbd>Space</kbd> brakes, <kbd>P</kbd> parking brake, <kbd>Z</kbd>/<kbd>X</kbd> map range, <kbd>Enter</kbd> acknowledge</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer id="build"></footer>
+<!--GLASS_SCRIPTS-->
+</body>
+</html>

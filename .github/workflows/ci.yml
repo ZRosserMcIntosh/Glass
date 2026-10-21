@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**", "feature/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: avionics unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+
+  core:
+    name: flight core (wasi-sdk 25), integration and browser tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch wasi-sdk
+        run: |
+          curl -sSL -o wasi-sdk.tar.gz https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-linux.tar.gz
+          tar xzf wasi-sdk.tar.gz
+          echo "WASI_SDK=$PWD/wasi-sdk-25.0-x86_64-linux" >> "$GITHUB_ENV"
+      - name: Build the flight core and bundle the page
+        run: npm run build
+      - name: Avionics against the flight core
+        run: npm run test:core
+      - name: Browser test (headless Chromium)
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+          npm run test:browser
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glass
+          path: |
+            dist/glass.html
+            dist/glass.png

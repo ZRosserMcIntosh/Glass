@@ -1,0 +1,16 @@
+{
+  "name": "glass",
+  "version": "0.1.0",
+  "description": "Glass cockpit (PFD, ND, EICAS) and its avionics for the Aviation Dynamics flight core",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "sh scripts/build_core.sh && node scripts/bundle.mjs",
+    "bundle": "node scripts/bundle.mjs",
+    "test": "node --test test/unit/*.test.mjs",
+    "test:core": "node --test test/core.test.mjs",
+    "test:browser": "node test/browser.test.mjs"
+  }
+}
