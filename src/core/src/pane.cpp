@@ -52,8 +52,10 @@ constexpr Real kLaminateWedgeSupport = 0.15; // the same for wedges bonded to an
 constexpr Real kMembraneRatio = 0.3;
 constexpr Real kEdgeBond = 1e6;            // Pa: a sealant bond at break over the bite (structural silicone ~0.7-1 MPa)
 constexpr Real kWrapPiece = 0.06;          // m: bonded glass folded round an impactor breaks to pieces this size
-constexpr Real kWrapLag = 0.35;            // the sheet's edges trail the impactor by this share of its speed
-constexpr Real kWrapFold = 0.3;            // and fold in toward its path at this share
+constexpr Real kSheetPiece = 0.15;         // m: and elsewhere, cracked into pieces no bigger than this, still bonded
+constexpr Real kWrapCone = 1.0;            // rad: a sheet wrapped whole folds round the nose this far, then trails as a cone
+constexpr Real kWrapTight = 2.2;           // rad: a torn-out disc wraps round the impactor at most this far
+constexpr Real kWrapDish = 0.12;           // the outer sheet left behind dishes this share of its radius
 constexpr Real kWrapDisc = 2.0;            // the disc a tearing laminate wraps round an impactor, in rim radii
 constexpr int kMaxRings = 5;               // concentric rings per crack star
 constexpr Real kDormantCheck = 8e-6;       // s between looks at an arrested tip
@@ -353,6 +355,15 @@ void Pane::stepImpactor(int k, Real dt) {
     switch (I.phase) {
         case ImpactorPhase::Done: return;
         case ImpactorPhase::Flight: {
+            if (I.carriedBy >= 0) {
+                // Wrapped in the laminate it tore out: it goes where the sheet goes
+                // (stepped on the pieces' own clock, so carried on to now).
+                const Clump& c = frags_.clumps()[I.carriedBy];
+                I.vel = c.vel;
+                I.pos = c.pos + c.vel * (time_ - fragTime_) + c.rot.rotate(I.carryOffset);
+                if (c.resting) I.phase = ImpactorPhase::Done;
+                return;
+            }
             const Real sp = length(I.vel);
             const Real area = kPi * I.def.radius * I.def.radius;
             const Vec3 drag = I.vel * (-0.5 * kAirDensity * 0.4 * area * sp / m);
@@ -1588,6 +1599,12 @@ void Pane::pullOut(int k, Real edgePull) {
     const Real rim = I.membrane.rimRadius(), strength = I.membrane.strength();
     log(fmt("the laminate's edge pulls out of the frame (%.0f kN/m at the edge, the frame holds %.0f)", edgePull / 1e3,
             edgeHold() / 1e3));
+    // The glass is bonded to the interlayer: however it is cracked, the
+    // laminate goes as one sheet. Where it folds round the impactor its glass
+    // breaks small; the rest stays in hand-sized pieces still stuck to the polymer.
+    const Real R = std::max(I.def.radius, 1e-3);
+    const Real disc = kWrapDisc * rim;
+    const Real foldReach = std::max(R * kWrapCone, disc);
     std::vector<int> pieces;
     for (auto& G : glass_) {
         CrackNetwork& net = G.net;
@@ -1599,57 +1616,112 @@ void Pane::pullOut(int k, Real edgePull) {
         G.fragmented = true;
         if (G.originTime < 0) { G.origin = I.hit; G.originTime = time_; }
         const std::size_t built = frags_.fragments().size();
-        for (std::size_t i = before; i < built; ++i)
-            if (!frags_.fragments()[i].chip)
-                for (const int part : frags_.breakUp(static_cast<int>(i), kWrapPiece, rng_, time_)) pieces.push_back(part);
+        for (std::size_t i = before; i < built; ++i) {
+            const Fragment& f = frags_.fragments()[i];
+            if (f.chip) continue;
+            const bool folds = length(Vec2{f.pos.x, f.pos.y} - I.hit) - f.radius < foldReach + kWrapPiece;
+            for (const int part : frags_.breakUp(static_cast<int>(i), folds ? kWrapPiece : kSheetPiece, rng_, time_))
+                pieces.push_back(part);
+        }
         std::vector<std::uint32_t> crushed;
         for (std::size_t c = 0; c < net.grid().size(); ++c)
             if ((net.grid()[c] & CrackNetwork::kCrush) && !(net.grid()[c] & CrackNetwork::kRemoved))
                 crushed.push_back(static_cast<std::uint32_t>(c));
         net.markRemovedCells(crushed);
     }
-    // Each piece's share of the speed: the sheet's edges trail.
     Real rMax = 1e-3;
-    for (const int i : pieces) rMax = std::max(rMax, length(frags_.fragments()[i].origin - I.hit));
-    std::vector<Real> share(pieces.size());
+    // (A piece split off another keeps its centroid relative to its parent in origin: use where it is.)
+    auto at2 = [&](int i) { const Vec3& q = frags_.fragments()[i].pos; return Vec2{q.x, q.y}; };
+    for (const int i : pieces) rMax = std::max(rMax, length(at2(i) - I.hit));
     std::vector<char> inner(pieces.size());
-    const Real disc = kWrapDisc * rim;
-    Real glassIn = 0, glassOut = 0, pIn = 0, pOut = 0;  // mass, and momentum per unit speed
+    Real glassIn = 0, glassOut = 0;
     for (std::size_t n = 0; n < pieces.size(); ++n) {
         const Fragment& f = frags_.fragments()[pieces[n]];
-        const Real r = length(f.origin - I.hit);
-        share[n] = 1 - kWrapLag * sq(r / rMax);
-        inner[n] = r < disc;
+        inner[n] = length(at2(pieces[n]) - I.hit) < disc;
         (inner[n] ? glassIn : glassOut) += f.mass;
-        (inner[n] ? pIn : pOut) += f.mass * share[n];
     }
     // The polymer goes with the glass it is bonded to.
-    const Real sheetMass = lam_.massPerArea * def_.width * def_.height;
-    const Real discArea = std::min(kPi * disc * disc, def_.width * def_.height);
-    const Real polyArea = std::max(0.0, sheetMass - glassIn - glassOut) / (def_.width * def_.height);
-    const Real outMass = glassOut + polyArea * (def_.width * def_.height - discArea);
-    pIn += polyArea * discArea * (glassIn > 0 ? pIn / glassIn : 1);
-    pOut += polyArea * (def_.width * def_.height - discArea) * (glassOut > 0 ? pOut / glassOut : 1);
-    // Wrapped whole: everything shares the impactor's momentum.
-    Real u = m * v0 / (m + pIn + pOut), uOut = u;
+    const Real paneArea = def_.width * def_.height;
+    const Real sheetMass = lam_.massPerArea * paneArea;
+    const Real discArea = std::min(kPi * disc * disc, paneArea);
+    const Real polyArea = std::max(0.0, sheetMass - glassIn - glassOut) / paneArea;
+    const Real inMass = glassIn + polyArea * discArea, outMass = glassOut + polyArea * (paneArea - discArea);
+    // Wrapped whole: the sheet takes up the impactor's momentum.
+    Real u = m * v0 / (m + inMass + outMass), uOut = u;
     const Real need = outMass * u * u / (2 * rMax) / (2 * kPi * rim);
     const bool tore = need > strength;
     if (tore) {
         // The rim pulls the outer sheet with all the polymer has until it tears.
         uOut = u * std::sqrt(strength / need);
-        u = std::max(0.0, (m * v0 - pOut * uOut) / (m + pIn));
+        u = std::max(0.0, (m * v0 - outMass * uOut) / (m + inMass));
     }
-    for (std::size_t n = 0; n < pieces.size(); ++n) {
-        Fragment& f = frags_.fragments()[pieces[n]];
-        const Vec2 d = f.origin - I.hit;
-        const Real r = length(d), rho = r / rMax, sp = inner[n] ? u : uOut;
-        const Vec2 in = r > 1e-9 ? d * (-1 / r) : Vec2{};
-        // Folding in round the impactor's path; a torn-off sheet only flaps.
-        const Real fold = (inner[n] || !tore ? kWrapFold : 0.3 * kWrapFold) * sp * rho;
-        f.vel = axis * (sp * share[n]) + Vec3{in.x, in.y, 0} * fold +
-                Vec3{rng_.uniform(-0.03, 0.03), rng_.uniform(-0.03, 0.03), rng_.uniform(-0.03, 0.03)} * sp;
-        f.omega = {rng_.uniform(-30, 30), rng_.uniform(-30, 30), rng_.uniform(-15, 15)};
-        releaseFragment(pieces[n]);
+    // Where each piece ends up once the sheet has folded: round the impactor
+    // from its nose, then (wrapped whole) trailing back as a cone, like a
+    // canopy; torn off, the outer sheet only dishes round the hole.
+    Vec3 radial0{1, 0, 0};
+    if (std::fabs(axis.x) > 0.9) radial0 = {0, 1, 0};
+    auto turn = [&](const Vec3& from, const Vec3& to) {
+        const Vec3 c = cross(from, to);
+        const Real d = std::clamp(dot(from, to), -1.0, 1.0), sn = length(c);
+        if (sn < 1e-9) return Quat{};
+        const Real a = std::atan2(sn, d), h = std::sin(a / 2) / sn;
+        return Quat{std::cos(a / 2), c.x * h, c.y * h, c.z * h};
+    };
+    const Vec3 C = I.pos;
+    auto place = [&](Fragment& f, bool wrapsTight, Real dish) {
+        const Vec2 d = Vec2{f.pos.x, f.pos.y} - I.hit;
+        const Real r = length(d);
+        Vec3 rad = r > 1e-9 ? Vec3{d.x / r, d.y / r, 0} : radial0;
+        rad = rad - axis * dot(rad, axis);
+        rad = length(rad) > 1e-9 ? normalize(rad) : radial0;
+        // Depth of the ply below the struck face, along the sheet's normal.
+        const Real h = I.side > 0 ? f.pos.z : lam_.thickness - f.pos.z;
+        Vec3 at, nrm;
+        if (dish > 0) {
+            const Real x = r / rMax, slope = -2 * dish * x / rMax;
+            at = f.pos + axis * (dish * (1 - x * x));
+            nrm = normalize(axis - rad * slope);
+        } else {
+            const Real end = wrapsTight ? std::min(disc / R, kWrapTight) : kWrapCone;
+            const Real th = std::min(r / R, end);
+            nrm = axis * std::cos(th) + rad * std::sin(th);
+            at = C + nrm * R + (rad * std::cos(th) - axis * std::sin(th)) * std::max(0.0, r - R * th) + nrm * h;
+        }
+        f.foldOffset = at;  // made relative to the sheet's centre below
+        f.foldRot = turn(axis, nrm);
+    };
+    auto sheet = [&](const std::vector<int>& members, Real speed, Real extra, Real area, Real foldTime, bool carries) {
+        if (members.empty()) return -1;
+        for (const int i : members) releaseFragment(i);
+        const int ci = frags_.makeClump(members, axis * speed,
+                                        {rng_.uniform(-1, 1), rng_.uniform(-1, 1), rng_.uniform(-0.5, 0.5)}, time_, rng_);
+        Clump& c = frags_.clumps()[ci];
+        c.bonded = true;
+        c.extraMass = extra;
+        c.dragArea = area;
+        c.foldStart = time_;
+        c.foldTime = foldTime;
+        for (const int i : members) frags_.fragments()[i].foldOffset -= c.pos;
+        if (carries) {
+            I.carriedBy = ci;
+            I.carryOffset = C - c.pos;
+        }
+        return ci;
+    };
+    const Real fold = std::clamp(rMax / std::max(u, 1.0), 1e-3, 0.3);
+    if (!tore) {
+        for (const int i : pieces) place(frags_.fragments()[i], false, 0);
+        // Folded like a canopy it shows the air about half its area.
+        sheet(pieces, u, sheetMass - glassIn - glassOut + m, 0.5 * paneArea, fold, true);
+    } else {
+        std::vector<int> in, out;
+        for (std::size_t n = 0; n < pieces.size(); ++n) {
+            Fragment& f = frags_.fragments()[pieces[n]];
+            place(f, true, inner[n] ? 0.0 : kWrapDish * rMax);
+            (inner[n] ? in : out).push_back(pieces[n]);
+        }
+        sheet(in, u, polyArea * discArea + m, 0.5 * discArea, std::clamp(disc / std::max(u, 1.0), 0.5e-3, 0.1), true);
+        sheet(out, uOut, polyArea * (paneArea - discArea), paneArea - discArea, fold, false);
     }
     for (auto& sh : sheets_) sh.sync(frags_);
     I.vel = axis * u;

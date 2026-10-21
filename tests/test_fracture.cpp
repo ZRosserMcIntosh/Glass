@@ -446,6 +446,17 @@ TEST_CASE("cannonball: rifle-rated glass is ripped out of its frame and goes wit
         if (!f.retired && !f.chip && f.state != FragmentState::Held) ++free, vz += f.vel.z;
     CHECK(free > 50);
     CHECK(vz > 0);
+    // Bonded to the polycarbonate, the broken glass goes as one sheet, with the ball wrapped in it.
+    const auto& I = s.pane->impactors()[0];
+    CHECK(I.carriedBy >= 0);
+    if (I.carriedBy < 0) return;
+    auto& sheet = s.pane->fragments().clumps()[I.carriedBy];
+    CHECK(sheet.bonded);
+    int loose = 0;
+    for (const auto& f : s.pane->fragments().fragments())
+        if (!f.retired && !f.chip && f.state != FragmentState::Held && f.clump != I.carriedBy) ++loose;
+    CHECK(loose == 0);
+    CHECK_NEAR(sheet.vel.z, I.vel.z, 0.05);  // (read a fracture step apart)
 }
 
 TEST_CASE("cannonball: a thin interlayer tears round the ball; a bullet still plugs thick armour") {
@@ -453,6 +464,15 @@ TEST_CASE("cannonball: a thin interlayer tears round the ball; a bullet still pl
     const auto l1 = shoot("ul752_l1", "cannonball_9lb", -1, 1);
     CHECK(l1.pane->pulledOut());
     CHECK(l1.report.outcome.find("disc of") != std::string::npos);
+    // The ball goes on in the disc it tore out; the rest of the window follows as one sheet, slower.
+    int sheets = 0;
+    for (const auto& c : l1.pane->fragments().clumps()) sheets += c.bonded;
+    CHECK(sheets == 2);
+    const auto& ball = l1.pane->impactors()[0];
+    CHECK(ball.carriedBy >= 0);
+    if (ball.carriedBy < 0) return;
+    for (const auto& c : l1.pane->fragments().clumps())
+        if (c.bonded && &c != &l1.pane->fragments().clumps()[ball.carriedBy]) CHECK(c.vel.z < ball.vel.z);
     // A wide pane in a strong frame holds its edge; the polymer dishes round the ball and tears.
     const auto v8 = shoot("armoured_windscreen_v8", "cannonball_9lb", -1, 1);
     CHECK(!v8.pane->pulledOut());

@@ -36,6 +36,8 @@ struct Fragment {
     int calm = 0;               // consecutive slow floor contacts (settling)
     int clump = -1;             // index of the clump it falls with, or -1
     Vec3 clumpOffset;           // centroid relative to the clump's, clump frame
+    Vec3 foldOffset;            // a bonded sheet's: where the fold takes it, clump frame
+    Quat foldRot;               // and how the fold turns it
     Real diceSize = 0;          // m, real tempered dice size of its ply (0: not tempered)
     Real freeAt = -1;  // s, when it last came free (a coarse tempered piece crumbles soon after)
     bool chip = false;          // spall / crush debris, not traced from a crack network
@@ -50,7 +52,10 @@ struct FragmentLink {
     Real length = 0;  // m
 };
 
-// A slab of crazed tempered glass falling as one before it bursts.
+// A slab of crazed tempered glass falling as one before it bursts; or the
+// broken glass of a laminate, bonded to its interlayer, going as one sheet
+// (`bonded`): it never comes apart, folds from flat to its members' fold
+// offsets over foldTime, and lands whole.
 struct Clump {
     std::vector<int> members;
     Vec3 pos, vel, omega;  // centre of mass, pane frame
@@ -59,6 +64,14 @@ struct Clump {
     Vec3 inertia;
     Real breakupAt = 0;    // s, when it comes apart in the air if it has not landed
     bool alive = false;
+    bool bonded = false;
+    Real extraMass = 0;    // kg carried that is not glass (the interlayer, an object wrapped in it)
+    Real dragArea = 0;     // m^2 it shows the air (0: the members' area)
+    Real foldStart = 0, foldTime = 0;
+    bool resting = false;
+    // Share of the fold done at time t (smoothstep), and its rate.
+    Real fold(Real t) const;
+    Real foldRate(Real t) const;
 };
 
 // A coarse piece of tempered glass that landed hard: renderers scatter
@@ -125,6 +138,7 @@ public:
 private:
     void split(std::size_t k, Rng& rng, Real time);
     void stepClumps(Real dt, Real time, Rng& rng);
+    void stepSheet(Clump& c, Real dt, Real time);
     bool inOpening(const Vec3& p) const;
     std::vector<Fragment> frags_;
     std::vector<std::vector<FragmentLink>> links_;

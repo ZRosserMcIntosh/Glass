@@ -492,10 +492,78 @@ void FragmentSystem::dissolve(int ci, Real, Rng& rng, Real spread) {
     }
 }
 
+Real Clump::fold(Real t) const {
+    if (foldTime <= 0) return t >= foldStart ? 1.0 : 0.0;
+    const Real x = std::clamp((t - foldStart) / foldTime, 0.0, 1.0);
+    return x * x * (3 - 2 * x);
+}
+
+Real Clump::foldRate(Real t) const {
+    if (foldTime <= 0) return 0;
+    const Real x = (t - foldStart) / foldTime;
+    return x <= 0 || x >= 1 ? 0.0 : 6 * x * (1 - x) / foldTime;
+}
+
+namespace {
+// The rotation a share s of the way from none to q (normalised lerp).
+Quat partway(const Quat& q, Real s) {
+    Quat r{1 - s + s * q.w, s * q.x, s * q.y, s * q.z};
+    if (q.w < 0) r = {1 - s - s * q.w, -s * q.x, -s * q.y, -s * q.z};
+    r.normalise();
+    return r;
+}
+}  // namespace
+
+// A laminate's sheet: one body whatever its glass is doing, folding as it
+// goes. On the floor it stops whole (it slides, it does not burst).
+void FragmentSystem::stepSheet(Clump& c, Real dt, Real time) {
+    if (c.resting) return;
+    const Real M = c.mass + c.extraMass, sp = length(c.vel);
+    Real area = c.dragArea;
+    if (area <= 0)
+        for (const int k : c.members) area += frags_[k].area;
+    c.vel += (Vec3{0, -kGravity, 0} + c.vel * (-0.5 * kAirDensity * 1.2 * area * sp / M)) * dt;
+    c.omega *= std::exp(-0.6 * dt);
+    c.pos += c.vel * dt;
+    c.rot.integrate(c.omega, dt);
+    const Real s = c.fold(time + dt), ds = c.foldRate(time + dt);
+    Real low = 0;
+    for (const int k : c.members) {
+        Fragment& f = frags_[k];
+        const Vec3 r = c.rot.rotate(f.clumpOffset + (f.foldOffset - f.clumpOffset) * s);
+        f.pos = c.pos + r;
+        f.rot = c.rot * partway(f.foldRot, s);
+        f.vel = c.vel + cross(c.omega, r) + c.rot.rotate(f.foldOffset - f.clumpOffset) * ds;
+        f.omega = c.omega;
+        // A flat piece reaches down its radius times how far it is turned from lying flat.
+        const Real ny = f.rot.rotate({0, 0, 1}).y;
+        low = std::max(low, floorY - (f.pos.y - f.radius * std::sqrt(std::max(0.0, 1 - ny * ny)) - 0.5 * f.thickness));
+    }
+    if (low <= 0) return;
+    c.pos.y += low;
+    for (const int k : c.members) frags_[k].pos.y += low;
+    if (c.vel.y < 0) c.vel.y *= -restitution;
+    const Real vh = std::hypot(c.vel.x, c.vel.z), slow = friction * kGravity * dt;
+    const Real keep = vh > slow ? 1 - slow / vh : 0.0;
+    c.vel.x *= keep;
+    c.vel.z *= keep;
+    c.omega *= 0.7;
+    if (length(c.vel) < 0.05 && length(c.omega) < 0.2) {
+        c.resting = true;
+        for (const int k : c.members) {
+            Fragment& f = frags_[k];
+            f.vel = {};
+            f.omega = {};
+            f.state = FragmentState::Resting;
+        }
+    }
+}
+
 void FragmentSystem::stepClumps(Real dt, Real time, Rng& rng) {
     for (int ci = 0; ci < static_cast<int>(clumps_.size()); ++ci) {
         Clump& c = clumps_[ci];
         if (!c.alive) continue;
+        if (c.bonded) { stepSheet(c, dt, time); continue; }
         const Real sp = length(c.vel);
         Real area = 0;
         for (const int k : c.members) area += frags_[k].area;

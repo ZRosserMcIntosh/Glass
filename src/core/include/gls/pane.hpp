@@ -95,6 +95,8 @@ struct Impactor {
     Real coneDepth = 0;               // m, contact damage (cone / median crack) under the struck face
     Real losCos = 1;                  // projectile: cosine of the obliquity (layers count 1 / losCos thick)
     std::size_t ballisticEventsSeen = 0;
+    int carriedBy = -1;               // the laminate sheet wrapped round it (a clump), or -1
+    Vec3 carryOffset;                 // its centre in that sheet's frame
 };
 
 // The crack star at a load point: the wedges between radial cracks bend as

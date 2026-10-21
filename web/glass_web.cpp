@@ -404,6 +404,31 @@ GLS_EXPORT double* gls_impactors() {
     return S.imps.data();
 }
 
+// The laminate sheet fragment i is bonded into (a clump index), or -1.
+GLS_EXPORT int gls_fragment_sheet(int i) {
+    Sim& S = sim();
+    if (!S.pane) return -1;
+    auto& fs = S.pane->fragments();
+    if (i < 0 || i >= static_cast<int>(fs.fragments().size())) return -1;
+    const int c = fs.fragments()[i].clump;
+    return c >= 0 && fs.clumps()[c].bonded ? c : -1;
+}
+
+// The sheet impactor k is wrapped in (a clump index), or -1.
+GLS_EXPORT int gls_carried_sheet(int k) {
+    Sim& S = sim();
+    if (!S.pane || k < 0 || k >= static_cast<int>(S.pane->impactors().size())) return -1;
+    return S.pane->impactors()[k].carriedBy;
+}
+
+// Mass (kg) of sheet c, glass and what it carries (its interlayer and any object wrapped in it).
+GLS_EXPORT double gls_sheet_mass(int c) {
+    Sim& S = sim();
+    if (!S.pane) return 0;
+    auto& cl = S.pane->fragments().clumps();
+    return c >= 0 && c < static_cast<int>(cl.size()) ? cl[c].mass + cl[c].extraMass : 0;
+}
+
 // Report of impactor k: 16 numbers (speed in/out, energy in/absorbed, peak
 // force, contact start/time, max stress, depth, bulge, broke, penetrated,
 // rebounded, embedded, diced, 0); the outcome sentence goes to the text buffer.
