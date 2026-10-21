@@ -104,6 +104,11 @@ public:
     int maxFragments = 6000;
     Real breakEnergyFactor = 40;  // landing energy over crack surface energy needed to break
     Real toughnessEnergy = 7.8;   // J/m^2, G_Ic = K_Ic^2 / E of the glass
+    // Gas pushing through an opening (a blast): pressure on loose pieces
+    // still in the opening (`pushSize`, from the pane's corner) and near its
+    // plane, + toward the back face, fading to nothing `pushReach` m either side.
+    Real pushPressure = 0, pushReach = 0.6;
+    Vec2 pushSize;
     std::uint64_t revision = 0;   // bumps when fragments are added or split
 
     // Per ply: fragment index of every grid cell (-1 none), from build().
@@ -117,6 +122,7 @@ public:
 private:
     void split(std::size_t k, Rng& rng, Real time);
     void stepClumps(Real dt, Real time, Rng& rng);
+    bool inOpening(const Vec3& p) const;
     std::vector<Fragment> frags_;
     std::vector<std::vector<FragmentLink>> links_;
     std::vector<Clump> clumps_;

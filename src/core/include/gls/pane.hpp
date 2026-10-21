@@ -117,6 +117,21 @@ struct CrushMark {
     int kind = 0;    // 0 contact damage or cone, 1 projectile
 };
 
+// A blast wave over the whole pane (+ pushes toward the back face): the
+// shock, reflected at the glass, as a Friedlander pulse; then, for a charge
+// in a closed room, the quasi-static pressure of its gas while the room vents.
+struct BlastLoad {
+    Real arrival = 0;     // s, engine time the shock reaches the pane
+    Real peak = 0;        // Pa, reflected peak overpressure
+    Real duration = 0;    // s, positive phase
+    Real decay = 1;       // Friedlander waveform coefficient
+    Real gasPeak = 0;     // Pa, quasi-static gas pressure (0: open air)
+    Real gasRise = 1e-3;  // s
+    Real gasTau = 0;      // s, venting time constant
+    Real pressure(Real t) const;
+    Real end() const;     // after this the load is negligible
+};
+
 struct Probe {
     Vec2 p;
     Real strength[2] = {0, 0};  // Pa: front face, back face
@@ -210,6 +225,11 @@ public:
     Real fragmentTime() const { return fragTime_; }  // when the pieces were last stepped
     void setFloor(Real y) { frags_.floorY = y; }
 
+    // Loads the pane with a blast wave (it can arrive later).
+    void blast(const BlastLoad& b);
+    Real blastPressure(Real t) const;  // Pa, all blasts at engine time t
+    const std::vector<BlastLoad>& blasts() const { return blasts_; }
+
 private:
     Real chooseStep() const;
     void step(Real dt);
@@ -231,6 +251,7 @@ private:
     void probeChecks();
     void freezeCheck();
     void releaseFragment(int index);
+    void blowOut(Real p);
     Real rateFactor(Real loadTime) const;
     Real nearFieldAt(Vec2 p) const;
     PlaneStress stressFromCurvature(int g, bool back, const Curvature& k, Real extraIso, bool layered = false) const;
@@ -274,6 +295,8 @@ private:
         Vec3 vel;  // what punched it, as it left
     };
     std::vector<Hole> holes_;
+    std::vector<BlastLoad> blasts_;
+    Real blastOnset_ = -1;  // s, when a blast first loaded the pane
 };
 
 }  // namespace gls

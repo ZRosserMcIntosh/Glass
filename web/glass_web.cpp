@@ -25,11 +25,16 @@ using namespace gls;
 
 namespace {
 
+constexpr int kSlots = 32;
+
 struct Sim {
     Library lib;
     std::vector<std::string> errors;
-    std::unique_ptr<Pane> pane;
+    std::unique_ptr<Pane> pane;  // the selected slot's pane: every call below works on it
     int glazing = -1;
+    int slot = 0;
+    std::unique_ptr<Pane> parked[kSlots];  // the other slots' panes
+    int parkedGlazing[kSlots] = {};
     std::string text;
     std::vector<double> state, imps, plies, report;
     std::vector<float> cracks, frags, poses, field;
@@ -214,6 +219,47 @@ GLS_EXPORT int gls_new_pane(int glazing, int tier, double seed) {
     return 1;
 }
 
+// Several panes side by side (a building's windows): `slot` 0..31 picks the
+// pane every other call works on; each slot keeps its own pane and clock.
+GLS_EXPORT int gls_select(int slot) {
+    Sim& S = sim();
+    if (slot < 0 || slot >= kSlots) return 0;
+    if (slot == S.slot) return 1;
+    std::swap(S.pane, S.parked[S.slot]);
+    std::swap(S.glazing, S.parkedGlazing[S.slot]);
+    S.slot = slot;
+    std::swap(S.pane, S.parked[slot]);
+    std::swap(S.glazing, S.parkedGlazing[slot]);
+    if (!S.pane) S.glazing = -1;
+    return 1;
+}
+
+// Drops the selected slot's pane.
+GLS_EXPORT void gls_free_pane() {
+    Sim& S = sim();
+    S.pane.reset();
+    S.glazing = -1;
+}
+
+// A blast wave on the pane (see gls::BlastLoad): arrival s, reflected peak Pa,
+// positive phase s, Friedlander decay, gas pressure Pa, its rise s and venting
+// time constant s.
+GLS_EXPORT int gls_blast(double arrival, double peak, double duration, double decay, double gasPeak, double gasRise,
+                         double gasTau) {
+    Sim& S = sim();
+    if (!S.pane) return 0;
+    BlastLoad b;
+    b.arrival = arrival;
+    b.peak = peak;
+    b.duration = std::max(duration, 1e-6);
+    b.decay = decay;
+    b.gasPeak = std::max(gasPeak, 0.0);
+    b.gasRise = std::max(gasRise, 1e-6);
+    b.gasTau = std::max(gasTau, 0.0);
+    S.pane->blast(b);
+    return 1;
+}
+
 GLS_EXPORT void gls_set_floor(double y) {
     if (sim().pane) sim().pane->setFloor(y);
 }
@@ -277,6 +323,7 @@ GLS_EXPORT double* gls_state() {
     for (const auto& sh : P.sheets()) held += sh.remaining();
     s[25] = held;
     s[26] = static_cast<double>(P.crushes().size());
+    s[27] = P.blastPressure(P.time());
     return s;
 }
 

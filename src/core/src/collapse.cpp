@@ -159,6 +159,11 @@ int CrazedSheet::step(FragmentSystem& fs, Real time, Rng& rng, const Release& re
     return released;
 }
 
+void CrazedSheet::sync(const FragmentSystem& fs) {
+    for (auto& d : dice_)
+        if (d.inPlace && fs.fragments()[d.frag].state != FragmentState::Held) d.inPlace = false;
+}
+
 void CrazedSheet::disturb(Vec2 at, Real radius, Real time) {
     for (std::size_t i = 0; i < dice_.size(); ++i)
         if (dice_[i].inPlace && length(dice_[i].c - at) < radius)

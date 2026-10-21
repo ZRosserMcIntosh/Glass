@@ -12,7 +12,8 @@ mkdir -p "$OUT"
 EXPORTS=""
 for f in gls_text gls_text_length gls_load gls_resolve gls_error_text gls_catalog gls_new_pane gls_set_floor \
          gls_fire gls_advance gls_time gls_last_step gls_state gls_plies gls_impactors gls_report gls_events \
-         gls_cracks gls_fragment_shapes gls_fragment_poses gls_sprays gls_crushes gls_fragment_map gls_field gls_count_fragments gls_bench; do
+         gls_cracks gls_fragment_shapes gls_fragment_poses gls_sprays gls_crushes gls_fragment_map gls_field gls_count_fragments gls_bench \
+         gls_select gls_free_pane gls_blast; do
   EXPORTS="$EXPORTS -Wl,--export=$f"
 done
 "$WASI_SDK/bin/clang++" --target=wasm32-wasip1 --sysroot="$WASI_SDK/share/wasi-sysroot" \

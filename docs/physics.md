@@ -215,6 +215,30 @@ so armour hit repeatedly in one place does give way. Every crushed disc is kept
 (`Pane::crushes()`, `G.crushes`): comminuted glass is white, and the status
 counts it as opaque.
 
+## 7. Blast
+
+`Pane::blast(BlastLoad)` loads the whole pane with a blast wave (+ toward the
+back face; `gls_blast` in the browser): the shock reflected at the glass as a
+Friedlander pulse, p(τ) = p_r (1 − τ/t_d) e^(−bτ/t_d), and, for a charge in a
+closed room, the quasi-static pressure of its gas, p_g (1 − e^(−τ/t_r))
+e^(−τ/τ_v), venting with time constant τ_v. The caller works out p_r, t_d, b
+and the gas from the charge and the room (the glass lab's house scene uses the
+Kinney–Graham fits for a TNT-equivalent charge in free air, the normal
+reflection factor, and the UFC 3-340-02 gas-pressure fit). The step lands on
+the shock and resolves its positive phase in 50 steps; the pane bends under
+it, and the flaw probes break it like any other load (with the rate factor
+counted from the shock's arrival).
+
+While the blast presses above 1 kPa, every loose piece whose pressure force
+(p × area) beats its frame grip leaves the frame — a crazed tempered sheet
+does not hold at all, since its friction is a few times a die's weight — with
+the glass's own speed and a turbulent scatter (± 0.4 m/s, a few rad/s).
+Pieces that are still in the opening and within 0.6 m of the pane's plane are
+then driven by the venting gas, p × area / mass, fading to nothing at 0.6 m.
+A 0.9 × 1.2 m pane of 6 mm fully tempered glass under a 150 kPa, 1.5 ms shock
+and 60 kPa of gas fails about 5 ms after the shock arrives and leaves at
+15–40 m/s as a cloud of dice (tests).
+
 ## Calibration constants
 
 All in [`pane.cpp`](../src/core/src/pane.cpp) and
@@ -233,6 +257,7 @@ All in [`pane.cpp`](../src/core/src/pane.cpp) and
 | Light band of a crack | 6 mm | estimated: glints either side of a crack line; with crushed area and open area this gives the status's visibility |
 | Crazed-sheet grip, side and hanging shares, confinement exponent | 1.3 × die weight per die width, 0.12, 0.05, 2 | a holed pane empties in 0.3–1 s to a fringe the frame holds, top first (footage of tempered panes emptying); tested, not measured |
 | Crumbling time | 0.8 s × margin / 2 | edges keep shedding dice for a few seconds |
+| Blast hold threshold, gas reach | 1 kPa, 0.6 m | estimated: a kPa beats any piece's weight and frame grip per area; the gas jet acts over about half a window's width |
 
 ## Main gaps
 

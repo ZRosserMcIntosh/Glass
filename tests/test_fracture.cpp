@@ -487,6 +487,78 @@ TEST_CASE("armoured windscreen: a submachine-gun barrage does not get through, b
     CHECK(st.visibility < (glstest::kOptimisedBuild ? 0.85 : 0.97));
 }
 
+// ---- Blast ---------------------------------------------------------------------------
+
+namespace {
+BlastLoad roomBlast(Real arrival, Real peak, Real gas) {
+    BlastLoad b;
+    b.arrival = arrival;
+    b.peak = peak;
+    b.duration = 1.5e-3;
+    b.decay = 1.2;
+    b.gasPeak = gas;
+    b.gasRise = 1.5e-3;
+    b.gasTau = 20e-3;
+    return b;
+}
+}  // namespace
+
+TEST_CASE("blast: a Friedlander pulse peaks on arrival, crosses zero after its positive phase and ends") {
+    const BlastLoad b = roomBlast(0.01, 100e3, 0);
+    CHECK(b.pressure(0.0099) == 0);
+    CHECK_NEAR(b.pressure(0.01), 100e3, 1);
+    CHECK_NEAR(b.pressure(0.01 + 1.5e-3), 0, 1);
+    CHECK(b.pressure(0.01 + 2e-3) < 0);  // the suction behind the shock
+    CHECK(b.pressure(b.end() + 1e-3) == 0);
+}
+
+TEST_CASE("blast: a room blast blows a tempered window out as dice, all of it outward") {
+    const auto& lib = glstest::library();
+    Pane p(*lib.glazing("tempered_6"), budgetForTier(1), 3);
+    p.setFloor(-0.9);
+    p.blast(roomBlast(2e-3, 150e3, 60e3));
+    p.advance(0.03);
+    int held = 0, out = 0, free = 0;
+    for (const auto& f : p.fragments().fragments()) {
+        if (f.retired) continue;
+        held += f.state == FragmentState::Held;
+        if (f.state == FragmentState::Free) { ++free; out += f.vel.z > 5; }
+    }
+    CHECK(free > 100);
+    CHECK(held == 0);            // nothing stays in the frame
+    CHECK(out > 0.9 * free);     // flying out of the room, fast
+}
+
+TEST_CASE("blast: a weak blast leaves a tempered window whole") {
+    const auto& lib = glstest::library();
+    Pane p(*lib.glazing("tempered_6"), budgetForTier(1), 3);
+    BlastLoad b = roomBlast(2e-3, 3e3, 0);
+    b.duration = 5e-3;
+    p.blast(b);
+    p.advance(0.1);
+    CHECK(p.fragments().fragments().empty());
+    CHECK(!p.status().cracked);
+}
+
+TEST_CASE("blast: a grenade through the window, then the blast clears what was left in the frame") {
+    const auto& lib = glstest::library();
+    const GlazingDef& g = *lib.glazing("tempered_6");
+    Pane p(g, budgetForTier(1), 2);
+    p.setFloor(-0.9);
+    p.fire(*lib.impactor("hand_grenade"), {0.5 * g.width, 0.55 * g.height}, 20, 0, 0, true, 0.3);
+    p.advance(0.05);
+    CHECK(p.impactors()[0].report.broke);
+    CHECK(p.impactors()[0].vel.z < -10);  // through, into the room
+    int heldBefore = 0;
+    for (const auto& f : p.fragments().fragments()) heldBefore += !f.retired && f.state == FragmentState::Held;
+    CHECK(heldBefore > 0);  // the crazed sheet still hangs in the frame
+    p.blast(roomBlast(0.06, 150e3, 60e3));
+    p.advance(0.08);
+    int held = 0;
+    for (const auto& f : p.fragments().fragments()) held += !f.retired && f.state == FragmentState::Held;
+    CHECK(held == 0);
+}
+
 // ---- Host coupling ------------------------------------------------------------------
 
 TEST_CASE("bridge: a windscreen's inward normal points into the car") {

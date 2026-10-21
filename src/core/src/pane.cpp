@@ -39,6 +39,8 @@ constexpr Real kConeDrive = 50;            // energy to drive a cone through / i
 constexpr Real kAuerbach = 5e4;            // N/m: Hertzian cone load / ball radius (Auerbach's law)
 constexpr Real kWedgeStiffness = 1.0;      // wedge ring stiffness / (2 pi D / L^2)
 constexpr Real kRadialDrive = 1.0;         // hoop stress at radial tips / wedge-root stress
+constexpr Real kBlastActive = 200;         // Pa of blast pressure that counts as loading the pane
+constexpr Real kBlastHold = 1000;          // Pa above which a blast tears loose pieces from their hold
 constexpr Real kLaminateWedgeSupport = 0.15; // the same for wedges bonded to an interlayer
 constexpr int kMaxRings = 5;               // concentric rings per crack star
 constexpr Real kDormantCheck = 8e-6;       // s between looks at an arrested tip
@@ -136,6 +138,7 @@ Pane::Pane(const GlazingDef& def, const Budget& budget, std::uint64_t seed) : de
         glass_.push_back(std::move(G));
     }
     frags_.maxFragments = budget_.maxFragments;
+    frags_.pushSize = {W, H};
     if (!glass_.empty()) frags_.toughnessEnergy = sq(glass_[0].mat->toughness) / glass_[0].mat->youngs;
 }
 
@@ -192,6 +195,8 @@ int Pane::fireOne(const ImpactorDef& d, Vec2 at, Real speed, Real yaw, Real pitc
 // ---- Time stepping --------------------------------------------------------------------
 
 bool Pane::quiet() const {
+    for (const auto& b : blasts_)
+        if (time_ < b.end()) return false;
     for (const auto& I : imp_)
         if (I.phase != ImpactorPhase::Done) return false;
     for (const auto& G : glass_)
@@ -233,6 +238,11 @@ Real Pane::chooseStep() const {
     }
     for (const auto& G : glass_)
         if (G.net.activeTips() > 0) dt = std::min(dt, 0.5 * G.net.cell() / G.mat->crackSpeed);
+    for (const auto& b : blasts_) {
+        if (time_ < b.arrival) dt = std::min(dt, std::max(0.2e-6, b.arrival - time_));          // land on the shock
+        else if (time_ < b.arrival + 2 * b.duration) dt = std::min(dt, std::max(0.2e-6, b.duration / 50));
+        else if (time_ < b.end()) dt = std::min(dt, 50e-6);
+    }
     if (time_ - lastDynamic_ < kDynamicWindow) dt = std::min(dt, 10e-6);
     return dt;
 }
@@ -264,7 +274,15 @@ Real Pane::rateFactor(Real loadTime) const {
 void Pane::step(Real dt) {
     lastDt_ = dt;
     plate_.clearForces();
-    plate_.addPressure(def_.pressure);
+    const Real pb = blastPressure(time_);
+    plate_.addPressure(def_.pressure + pb);
+    if (std::fabs(pb) > kBlastActive) {
+        if (blastOnset_ < 0) {
+            blastOnset_ = time_;
+            log(fmt("blast wave arrives: %.0f kPa reflected", pb / 1e3));
+        }
+        lastDynamic_ = lastLoaded_ = time_;
+    }
     for (int k = 0; k < static_cast<int>(imp_.size()); ++k) stepImpactor(k, dt);
     plate_.step(dt);
     for (int k = 0; k < static_cast<int>(imp_.size()); ++k) {
@@ -301,10 +319,13 @@ void Pane::step(Real dt) {
             const Fragment& f = frags_.fragments()[i];
             if (!f.retired && f.state == FragmentState::Pending && time_ >= f.releaseTime) releaseFragment(i);
         }
+        const Real pf = blastPressure(time_);
+        if (std::fabs(pf) > kBlastHold) blowOut(pf);
         while (time_ - fragTime_ >= kFragmentStep) {
             fragTime_ += kFragmentStep;
             for (auto& sh : sheets_)
                 if (sh.active()) sh.step(frags_, fragTime_, rng_, [this](int f) { releaseFragment(f); });
+            frags_.pushPressure = blastPressure(fragTime_);
             frags_.step(kFragmentStep, fragTime_, rng_);
         }
     }
@@ -1354,6 +1375,7 @@ void Pane::probeChecks() {
     Real onset = -1;
     for (const auto& I : imp_)
         if (I.touched) onset = std::max(onset, I.loadOnset);
+    if (blastOnset_ >= 0) onset = std::max(onset, blastOnset_);
     if (onset < 0) return;
     const Real rf = rateFactor(time_ - onset);
     // With nothing pressing on the pane there is no near field, and no probe
@@ -1432,6 +1454,53 @@ void Pane::probeChecks() {
     }
 }
 
+// ---- Blast -------------------------------------------------------------------------------------
+
+Real BlastLoad::pressure(Real t) const {
+    const Real tau = t - arrival;
+    if (tau < 0) return 0;
+    Real p = 0;
+    // Friedlander: the positive phase, then a shallow suction, cut off once negligible.
+    if (duration > 0 && tau < 4 * duration) p += peak * (1 - tau / duration) * std::exp(-decay * tau / duration);
+    if (gasPeak > 0 && gasTau > 0)
+        p += gasPeak * (1 - std::exp(-tau / std::max(gasRise, 1e-6))) * std::exp(-tau / gasTau);
+    return p;
+}
+
+Real BlastLoad::end() const { return arrival + std::max(4 * duration, gasPeak > 0 ? 6 * gasTau : 0.0); }
+
+void Pane::blast(const BlastLoad& b) {
+    blasts_.push_back(b);
+    log(fmt("blast due at %.2f ms: %.0f kPa reflected, %.2f ms positive phase", b.arrival * 1e3, b.peak / 1e3,
+            b.duration * 1e3) + (b.gasPeak > 0 ? fmt(", %.0f kPa of gas", b.gasPeak / 1e3) : std::string()));
+}
+
+Real Pane::blastPressure(Real t) const {
+    Real p = 0;
+    for (const auto& b : blasts_) p += b.pressure(t);
+    return p;
+}
+
+// The pressure on each loose piece still in the frame against what holds it
+// there (its frame grip; the crazed sheet's friction is a few times a die's
+// weight, nothing against a blast): what cannot hold goes, with the glass's
+// own motion and a scatter from the turbulent jet.
+void Pane::blowOut(Real p) {
+    int n = 0;
+    for (int i = 0; i < static_cast<int>(frags_.fragments().size()); ++i) {
+        Fragment& f = frags_.fragments()[i];
+        if (f.retired || f.chip || f.state != FragmentState::Held || f.clump >= 0) continue;
+        if (std::fabs(p) * f.area <= def_.frameGrip * f.edgeContact + f.mass * kGravity) continue;
+        f.vel = {rng_.uniform(-0.4, 0.4), rng_.uniform(-0.4, 0.4), plate_.velocity(f.origin.x, f.origin.y)};
+        f.omega = {rng_.uniform(-15, 15), rng_.uniform(-15, 15), rng_.uniform(-8, 8)};
+        releaseFragment(i);
+        ++n;
+    }
+    if (!n) return;
+    for (auto& sh : sheets_) sh.sync(frags_);
+    log(fmt("the blast tears %.0f loose pieces out of the frame", static_cast<double>(n)));
+}
+
 // ---- Fragments ----------------------------------------------------------------------------------
 
 void Pane::releaseFragment(int index) {
@@ -1489,6 +1558,9 @@ void Pane::freezeCheck() {
         }
         net.markRemovedCells(crushed);
         int freed = 0, pending = 0, held = 0;
+        // A blast still pressing on the pane tears out whatever its hold cannot keep.
+        const Real pNow = std::fabs(blastPressure(time_));
+        const bool blown = pNow > kBlastHold;
         std::vector<int> sheetDice, sheetGone;
         std::vector<char> sheetFrame;
         for (std::size_t i = before; i < frags_.fragments().size(); ++i) {
@@ -1543,12 +1615,17 @@ void Pane::freezeCheck() {
                 else if (edgesTouched >= 2) supported = true;                      // wedged across a corner
                 else if (f.edges && def_.frameGrip * f.edgeContact >= f.mass * kGravity) supported = true;
             }
+            if (blown && pNow * f.area > def_.frameGrip * f.edgeContact) supported = false;
+            if (blown && !pushed && !supported) {
+                f.vel += Vec3{rng_.uniform(-0.4, 0.4), rng_.uniform(-0.4, 0.4), 0};
+                f.omega += Vec3{rng_.uniform(-15, 15), rng_.uniform(-15, 15), rng_.uniform(-8, 8)};
+            }
             // The dice at the break origin are pulverised and leave a hole.
             if (G.dicing && !pushed && length(c - G.origin) < std::max(1.2 * G.diceSpacing, 2 * net.cell())) {
                 pushed = true;
                 f.vel = Vec3{rng_.uniform(-0.3, 0.3), rng_.uniform(-0.3, 0.3), rng_.uniform(-0.6, 0.6)};
             }
-            if (G.dicing && !pushed) {
+            if (G.dicing && !pushed && !blown) {
                 // Crazed but still in the frame: the sheet decides when it goes.
                 f.state = FragmentState::Held;
                 f.vel = {};

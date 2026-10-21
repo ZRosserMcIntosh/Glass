@@ -57,6 +57,9 @@ public:
     // marks its cells as empty). Returns the number released.
     int step(FragmentSystem& fs, Real time, Rng& rng, const Release& release);
 
+    // Dice something else has already freed (a blast) leave the sheet.
+    void sync(const FragmentSystem& fs);
+
     // A new impact or a hard knock near `at` makes the dice there recheck.
     void disturb(Vec2 at, Real radius, Real time);
 

@@ -498,6 +498,8 @@ void FragmentSystem::stepClumps(Real dt, Real time, Rng& rng) {
         for (const int k : c.members) area += frags_[k].area;
         const Vec3 drag = c.vel * (-0.5 * kAirDensity * 1.2 * 0.5 * area * sp);
         c.vel += (Vec3{0, -kGravity, 0} + drag / c.mass) * dt;
+        if (pushPressure != 0 && inOpening(c.pos) && std::fabs(c.pos.z) < pushReach)
+            c.vel.z += pushPressure * (1 - std::fabs(c.pos.z) / pushReach) * area / c.mass * dt;
         c.omega *= std::exp(-0.6 * dt);
         c.pos += c.vel * dt;
         c.rot.integrate(c.omega, dt);
@@ -589,6 +591,11 @@ void FragmentSystem::split(std::size_t k, Rng& rng, Real time) {
     ++revision;
 }
 
+bool FragmentSystem::inOpening(const Vec3& p) const {
+    constexpr Real kMargin = 0.05;
+    return p.x > -kMargin && p.y > -kMargin && p.x < pushSize.x + kMargin && p.y < pushSize.y + kMargin;
+}
+
 void FragmentSystem::step(Real dt, Real time, Rng& rng) {
     stepClumps(dt, time, rng);
     std::vector<std::size_t> toSplit;
@@ -628,6 +635,11 @@ void FragmentSystem::step(Real dt, Real time, Rng& rng) {
         const Real sp = length(f.vel);
         const Vec3 drag = f.vel * (-0.5 * kAirDensity * 1.2 * 0.5 * f.area * sp);
         f.vel += (Vec3{0, -kGravity, 0} + drag / f.mass) * dt;
+        // Gas venting through the opening drives the pieces still in it.
+        if (pushPressure != 0 && inOpening(f.pos)) {
+            const Real d = std::fabs(f.pos.z);
+            if (d < pushReach) f.vel.z += pushPressure * (1 - d / pushReach) * f.area / f.mass * dt;
+        }
         f.omega *= spinDecay;
         f.pos += f.vel * dt;
         f.rot.integrate(f.omega, dt);
