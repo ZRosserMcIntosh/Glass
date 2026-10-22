@@ -29,8 +29,8 @@ pressure). [docs/integration.md](docs/integration.md) shows the coupling.
 | Prince Rupert's drop | A body of revolution with a frozen compressive skin round a core in tension; snapping the tail sends a fracture front at the terminal crack speed to the head, every fragment timed; a strike breaks it only by getting a crack through the skin (Roesler for hard objects, a flowing-contact criterion for soft bullets) | `tests/test_rupert.cpp` (stress balance, front timing, .38 and 9 mm splash, 7.62 and a hammer swing break it, a tap does not) |
 | Pieces | Enclosed regions cut out by flood fill and traced into polygons, flown as rigid bodies (gravity, drag, floor friction), broken again by hard landings; pieces wedged in the frame or gripped by the gasket stay | `tests/test_fracture.cpp` |
 | Hosts | Pane mounts in the OpenRoad (ISO 8855) and Aviation (FRD) body frames, host-frame strikes, and a status back (visibility, barrier, open area, bulge) | `tests/test_bridge` cases in `tests/test_fracture.cpp` |
-| Any device | Five tiers (potato to ultra) change resolution, not physics: plate modes, crack grid, tip and piece budgets. Results do not depend on how the host chops its frames | `tests/test_fracture.cpp` (same outcome on every tier; frame-rate independence) |
-| Browser | WebAssembly build (wasi-sdk, no exceptions or RTTI, 310 KB) with a C ABI; Node smoke test | `web/`, `web/smoke_test.mjs` |
+| Any device | Five budgets (potato to ultra) set the resolution: plate modes, crack grid, tip and piece budgets. Clear-cut shots end the same on every budget; near a threshold the resolution can tip the result, so a host that must agree on every device uses one budget everywhere (the Glass Lab runs `high` on all of them). Results do not depend on how the host chops its frames | `tests/test_fracture.cpp` (same outcome on every tier; frame-rate independence) |
+| Browser | WebAssembly builds (wasi-sdk, no exceptions or RTTI, about 430 KB): one with SIMD, one without, bit-identical results; C ABI; Node smoke test | `web/`, `web/smoke_test.mjs` |
 
 72 test cases, on Linux (gcc, clang, sanitizers), macOS, Windows and WASM in CI.
 What each scenario gives against its standard is in
@@ -97,8 +97,9 @@ Shared with the vehicle and flight cores:
 
 - **Nothing canned.** Every crack, piece and force comes out of the mechanics;
   the renderer only draws.
-- **Lower tiers lower resolution, not physics.** A weak device gets fewer modes
-  and coarser cracks, and the clock slows down rather than skipping physics.
+- **One physics, any device.** A host picks one budget for everyone; a slow
+  device takes longer over it (the clock slows down) rather than computing
+  something coarser or skipping physics.
 - **Scientific honesty.** Every value is tagged `published`, `calibrated` or
   `estimated` with its source. The few calibration constants are listed with
   what they were fitted to. Layups for bullet-resistant and aircraft glazing are

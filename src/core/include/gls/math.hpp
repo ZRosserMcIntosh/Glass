@@ -82,16 +82,26 @@ struct Quat {
                 w * b.y - x * b.z + y * b.w + z * b.x, w * b.z + x * b.y - y * b.x + z * b.w};
     }
     void normalise() {
-        const Real n = std::sqrt(w * w + x * x + y * y + z * z);
-        w /= n; x /= n; y /= n; z /= n;
+        const Real n = 1 / std::sqrt(w * w + x * x + y * y + z * z);
+        w *= n; x *= n; y *= n; z *= n;
     }
     // Advances by angular velocity `om` (pane frame, rad/s) over dt.
     void integrate(const Vec3& om, Real dt) {
-        const Real a = length(om) * dt;
-        if (a < 1e-12) return;
-        const Vec3 ax = normalize(om);
-        const Real s = std::sin(a / 2);
-        const Quat dq{std::cos(a / 2), ax.x * s, ax.y * s, ax.z * s};
+        const Real len = length(om), h = 0.5 * len * dt;
+        if (h < 5e-13) return;
+        Real s, c;
+        if (h < 0.02) {
+            // A piece turns a small angle per step: the series is exact to
+            // double precision here and saves the library call.
+            const Real h2 = h * h;
+            s = h * (1 - h2 / 6 * (1 - h2 / 20 * (1 - h2 / 42)));
+            c = 1 - h2 / 2 * (1 - h2 / 12 * (1 - h2 / 30));
+        } else {
+            s = std::sin(h);
+            c = std::cos(h);
+        }
+        const Real k = s / len;
+        const Quat dq{c, om.x * k, om.y * k, om.z * k};
         *this = dq * *this;
         normalise();
     }

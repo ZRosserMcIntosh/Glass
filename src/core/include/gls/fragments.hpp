@@ -69,6 +69,7 @@ struct Clump {
     Real dragArea = 0;     // m^2 it shows the air (0: the members' area)
     Real foldStart = 0, foldTime = 0;
     bool resting = false;
+    bool stale = false;    // members' poses not yet brought up to the clump's (syncClumps)
     // Share of the fold done at time t (smoothstep), and its rate.
     Real fold(Real t) const;
     Real foldRate(Real t) const;
@@ -104,6 +105,10 @@ public:
     // Makes the given (pane-aligned) pieces fall as one rigid slab.
     int makeClump(const std::vector<int>& members, const Vec3& vel, const Vec3& omega, Real time, Rng& rng);
     void dissolve(int clump, Real time, Rng& rng, Real spread);
+    // Brings every clump member's pose up to its clump's. Clumps in the air
+    // only move their members when something reads them: call this before
+    // reading fragment poses (Pane::advance does on return).
+    void syncClumps();
     // Breaks piece k along random lines, and its parts again, until each is
     // under maxRadius (or the fragment budget runs out). Returns the parts.
     std::vector<int> breakUp(int k, Real maxRadius, Rng& rng, Real time);
@@ -138,6 +143,7 @@ public:
 private:
     void split(std::size_t k, Rng& rng, Real time);
     void stepClumps(Real dt, Real time, Rng& rng);
+    bool syncClump(Clump& c);  // returns whether a member is below the floor
     void stepSheet(Clump& c, Real dt, Real time);
     bool inOpening(const Vec3& p) const;
     std::vector<Fragment> frags_;

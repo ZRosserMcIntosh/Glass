@@ -44,7 +44,7 @@ built to that standard does, not a certification.
 | 00 buckshot (9 pellets, 395 m/s, from 7 m) on 6 mm annealed / on the armoured windscreen | Through plate glass; stopped by handgun-rated armour | All through at 210-240 m/s, a ragged hole larger than the pattern; all stopped in the third ply |
 | Same seed twice; another seed | Identical; different | Identical; different |
 | Same shot at 60 and 997 host frames per second | Identical | Identical |
-| Same shot on every tier | Same outcome | Same outcome (penetrated / held) |
+| Same clear-cut shot on every tier | Same outcome | Same outcome (penetrated / held); near a threshold the tier can tip it, so hosts use one tier everywhere |
 
 ## Unit checks
 
@@ -64,10 +64,10 @@ scenarios of 0.3 s each):
 | Tier | Total |
 |---|---|
 | potato | 0.17 s |
-| low | 0.44 s |
-| medium | 0.98 s |
-| high | 2.7 s |
-| ultra | 8.0 s |
+| low | 0.29 s |
+| medium | 0.55 s |
+| high | 1.5 s |
+| ultra | 4.5 s |
 
 In the browser the same work is spread over the slow-motion playback; when a
 device cannot keep up the clock slows instead of skipping physics.

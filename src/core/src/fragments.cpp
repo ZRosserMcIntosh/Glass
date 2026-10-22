@@ -315,8 +315,20 @@ int FragmentSystem::build(const CrackNetwork& net, int ply, Real zMid, Real thic
             if (j == ny - 1) { edgeLen[r] += cell; edgeMask[r] |= 8; }
         }
     }
-    std::sort(edges.begin(), edges.end(),
-              [](const Edge& a, const Edge& b) { return std::tie(a.region, a.from) < std::tie(b.region, b.from); });
+    // Grouped by region (a counting sort: there are many edges and few
+    // regions), then by start corner within each region.
+    {
+        std::vector<std::size_t> at(static_cast<std::size_t>(regions) + 1, 0);
+        for (const Edge& e : edges) ++at[static_cast<std::size_t>(e.region) + 1];
+        for (int r = 0; r < regions; ++r) at[r + 1] += at[r];
+        std::vector<Edge> grouped(edges.size());
+        std::vector<std::size_t> put(at.begin(), at.end() - 1);
+        for (const Edge& e : edges) grouped[put[e.region]++] = e;
+        for (int r = 0; r < regions; ++r)
+            std::sort(grouped.begin() + static_cast<std::ptrdiff_t>(at[r]), grouped.begin() + static_cast<std::ptrdiff_t>(at[r + 1]),
+                      [](const Edge& a, const Edge& b) { return std::tie(a.from, a.to) < std::tie(b.from, b.to); });
+        edges.swap(grouped);
+    }
 
     // 5. Chain each region's edges into loops; the largest is the outline.
     std::vector<int> regionIndex(regions, -1);
@@ -396,7 +408,10 @@ int FragmentSystem::build(const CrackNetwork& net, int ply, Real zMid, Real thic
             int fa = regionIndex[a], fb = regionIndex[b];
             if (fa < 0 || fb < 0) return;
             if (fa > fb) std::swap(fa, fb);
-            pairs.push_back({(static_cast<std::uint64_t>(fa) << 32) | static_cast<std::uint32_t>(fb), 1});
+            const std::uint64_t key = (static_cast<std::uint64_t>(fa) << 32) | static_cast<std::uint32_t>(fb);
+            // Neighbouring cells mostly add the same pair: count it in place.
+            if (!pairs.empty() && pairs.back().first == key) ++pairs.back().second;
+            else pairs.push_back({key, 1});
         };
         // Pieces either side of a crack cell share that bit of crack.
         for (int j = 0; j < ny; ++j)
@@ -424,9 +439,10 @@ int FragmentSystem::build(const CrackNetwork& net, int ply, Real zMid, Real thic
         std::sort(pairs.begin(), pairs.end());
         for (std::size_t k = 0; k < pairs.size();) {
             std::size_t e = k;
-            while (e < pairs.size() && pairs[e].first == pairs[k].first) ++e;
+            int cells = 0;
+            while (e < pairs.size() && pairs[e].first == pairs[k].first) cells += pairs[e++].second;
             const int fa = static_cast<int>(pairs[k].first >> 32), fb = static_cast<int>(pairs[k].first & 0xffffffffu);
-            const Real len = static_cast<Real>(e - k) * cell;
+            const Real len = static_cast<Real>(cells) * cell;
             links_[fa].push_back({fb, len});
             links_[fb].push_back({fa, len});
             k = e;
@@ -479,6 +495,7 @@ int FragmentSystem::makeClump(const std::vector<int>& members, const Vec3& vel, 
 void FragmentSystem::dissolve(int ci, Real, Rng& rng, Real spread) {
     Clump& c = clumps_[ci];
     if (!c.alive) return;
+    if (c.stale) syncClump(c);
     c.alive = false;
     for (const int k : c.members) {
         Fragment& f = frags_[k];
@@ -574,20 +591,35 @@ void FragmentSystem::stepClumps(Real dt, Real time, Rng& rng) {
         c.omega *= std::exp(-0.6 * dt);
         c.pos += c.vel * dt;
         c.rot.integrate(c.omega, dt);
-        bool landed = false;
-        for (const int k : c.members) {
-            Fragment& f = frags_[k];
-            const Vec3 r = c.rot.rotate(f.clumpOffset);
-            f.pos = c.pos + r;
-            f.rot = c.rot;
-            f.vel = c.vel + cross(c.omega, r);
-            f.omega = c.omega;
-            if (f.pos.y - f.radius < floorY) landed = true;
-        }
+        // Its members only move when they are read, or could be touching the
+        // floor (no member reaches further than the clump's radius).
+        c.stale = true;
+        const bool low = c.pos.y - c.radius <= floorY + 1e-9;
+        const bool landed = (low || time >= c.breakupAt) && syncClump(c);
         // A slab of loose dice does not survive the floor, nor long in the air.
         if (landed) dissolve(ci, time, rng, 0.35 + 0.08 * std::fabs(c.vel.y));
         else if (time >= c.breakupAt) dissolve(ci, time, rng, 0.25);
     }
+}
+
+bool FragmentSystem::syncClump(Clump& c) {
+    bool landed = false;
+    for (const int k : c.members) {
+        Fragment& f = frags_[k];
+        const Vec3 r = c.rot.rotate(f.clumpOffset);
+        f.pos = c.pos + r;
+        f.rot = c.rot;
+        f.vel = c.vel + cross(c.omega, r);
+        f.omega = c.omega;
+        if (f.pos.y - f.radius < floorY) landed = true;
+    }
+    c.stale = false;
+    return landed;
+}
+
+void FragmentSystem::syncClumps() {
+    for (auto& c : clumps_)
+        if (c.alive && c.stale) syncClump(c);
 }
 
 int FragmentSystem::fragmentAt(int ply, Vec2 p) const {

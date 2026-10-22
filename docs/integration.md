@@ -68,6 +68,11 @@ renderer replay the fracture at any speed.
 
 ## Budgets
 
-`budgetForTier(0..4)` trades resolution, not physics: plate modes, crack grid,
-tip and piece budgets. A car on a weak console can use tier 1 for its
-windscreen; a close-up camera can use tier 3.
+`budgetForTier(0..4)` sets the resolution: plate modes, crack grid, tip and
+piece budgets. A shot well clear of a threshold ends the same on every budget,
+but near one (a ball just fast enough to break the pane) the resolution can
+tip it either way. Where every player or viewer must see the same result, give
+everyone the same budget and let slower machines take longer over it: the
+Glass Lab runs `budgetForTier(3)` on every device, in a worker, and slows its
+clock when the device cannot keep up. A scene of many panes can give each a
+coarser budget, so long as it is the same one for everybody.

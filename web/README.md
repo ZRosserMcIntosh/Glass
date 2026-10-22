@@ -1,8 +1,11 @@
 # Browser build
 
-`build_wasi.sh` compiles the core and `glass_web.cpp` (a C ABI) to
-`glass.wasm` with wasi-sdk (no exceptions, no RTTI, reactor model), copies the
-loader as `glass.mjs`, and merges `data/*.json` into `library.json`.
+`build_wasi.sh` compiles the core and `glass_web.cpp` (a C ABI) with wasi-sdk
+(no exceptions, no RTTI, reactor model, `-O3 -flto`) twice: `glass.wasm` with
+WebAssembly SIMD and `glass-scalar.wasm` without, for browsers that lack it.
+The core's sums keep their order and wasm has no fused multiply-add, so the two
+give bit-identical results. It copies the loader as `glass.mjs` and merges
+`data/*.json` into `library.json`.
 
 ```js
 import createGlassModule from './glass.mjs';
@@ -16,7 +19,8 @@ G.gls_advance(t, maxSteps);                           // whole steps until time 
 
 Numbers come back in typed arrays; the small ones (`state`, `plies`,
 `impactors`) are copies, the big ones are views into the module's memory, valid
-until the next call.
+until the next call. `G.memory` is the module's memory, for a host that reads
+the layouts itself (a worker copying them out, say).
 
 | Call | Layout |
 |---|---|

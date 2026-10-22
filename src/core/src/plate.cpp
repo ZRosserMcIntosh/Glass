@@ -139,6 +139,11 @@ void ModalPlate::configure(Real a, Real b, Real D, Real rhoH, Real nu, Real zeta
         const Real t = kPi * k / (N_ + 1);
         sigY_[k] = k == 0 ? 1 : std::sin(t) / t;
     }
+    // Wavenumbers, kept so the per-point sums do not divide.
+    kX_.resize(M_ + 1);
+    kY_.resize(N_ + 1);
+    for (int m = 0; m <= M_; ++m) kX_[m] = m * kPi / a_;
+    for (int k = 0; k <= N_; ++k) kY_[k] = k * kPi / b_;
     resolution_ = kResolutionFactor * std::max(a_ / M_, b_ / N_);
     cacheDt_ = -1;
     sx_.resize(M_ + 1); cx_.resize(M_ + 1); sy_.resize(N_ + 1); cy_.resize(N_ + 1);
@@ -256,6 +261,24 @@ Real ModalPlate::velocity(Real x, Real y) const {
     return w;
 }
 
+ModalPlate::Motion ModalPlate::motion(Real x, Real y) const {
+    // velocity() and velocityGradient() in one pass (the same sums, in the same order).
+    basis(x, y, sx_, cx_, sy_, cy_);
+    Real w = 0, gx = 0, gy = 0;
+    for (int m = 1; m <= M_; ++m) {
+        Real is = 0, ic = 0;
+        const Real* v = &v_[(m - 1) * N_];
+        for (int k = 1; k <= N_; ++k) {
+            is += v[k - 1] * sy_[k];
+            ic += v[k - 1] * kY_[k] * cy_[k];
+        }
+        w += sx_[m] * is;
+        gx += kX_[m] * cx_[m] * is;
+        gy += sx_[m] * ic;
+    }
+    return {w, {gx, gy}};
+}
+
 Vec2 ModalPlate::velocityGradient(Real x, Real y) const {
     basis(x, y, sx_, cx_, sy_, cy_);
     Real gx = 0, gy = 0;
@@ -308,81 +331,79 @@ Real ModalPlate::curvatureBound() const {
 
 void ModalPlate::sampleGrid(int nx, int ny, Real* w, Real* wdot, Curvature* k) const {
     if (nx < 2 || ny < 2) return;
-    // Separable evaluation: T[m][j] = sum_n q[m][n] * (row basis at y_j), then
-    // a sum over m per lattice point. Basis tables are kept between calls.
-    if (nx != gNx_ || ny != gNy_ || gSX_.size() != static_cast<std::size_t>(nx) * (M_ + 1) ||
-        gSY_.size() != static_cast<std::size_t>(ny) * (N_ + 1)) {
+    // Separable evaluation: T[j][m] = sum_n q[m][n] * (row basis at y_j), then
+    // a sum over m per lattice point. The x tables carry each mode's factors
+    // (filter, wavenumbers), so both passes are contiguous dot products.
+    // Tables are kept between calls for the last lattice size.
+    const std::size_t M = static_cast<std::size_t>(M_), N = static_cast<std::size_t>(N_);
+    if (nx != gNx_ || ny != gNy_ || gSX_.size() != static_cast<std::size_t>(nx) * M ||
+        gSY_.size() != static_cast<std::size_t>(ny) * N) {
         gNx_ = nx;
         gNy_ = ny;
-        gSX_.resize(static_cast<std::size_t>(nx) * (M_ + 1));
-        gCX_.resize(gSX_.size());
-        gSY_.resize(static_cast<std::size_t>(ny) * (N_ + 1));
-        gCY_.resize(gSY_.size());
+        for (auto* t : {&gSX_, &gXX_, &gXS_, &gXY_}) t->resize(static_cast<std::size_t>(nx) * M);
+        for (auto* t : {&gSY_, &gY1_, &gY2_, &gY3_}) t->resize(static_cast<std::size_t>(ny) * N);
         for (int i = 0; i < nx; ++i) {
             const Real t = kPi * i / (nx - 1);
-            for (int m = 0; m <= M_; ++m) {
-                gSX_[i * (M_ + 1) + m] = std::sin(m * t);
-                gCX_[i * (M_ + 1) + m] = std::cos(m * t);
+            for (std::size_t m = 0; m < M; ++m) {
+                const Real mm = static_cast<Real>(m + 1), km = mm * kPi / a_, s = std::sin(mm * t), c = std::cos(mm * t);
+                const std::size_t o = static_cast<std::size_t>(i) * M + m;
+                gSX_[o] = s;
+                gXX_[o] = -km * km * sigX_[m + 1] * s;
+                gXS_[o] = -sigX_[m + 1] * s;
+                gXY_[o] = km * sigX_[m + 1] * c;
             }
         }
         for (int j = 0; j < ny; ++j) {
             const Real t = kPi * j / (ny - 1);
-            for (int n = 0; n <= N_; ++n) {
-                gSY_[j * (N_ + 1) + n] = std::sin(n * t);
-                gCY_[j * (N_ + 1) + n] = std::cos(n * t);
+            for (std::size_t n = 0; n < N; ++n) {
+                const Real nn = static_cast<Real>(n + 1), kn = nn * kPi / b_, s = std::sin(nn * t), c = std::cos(nn * t);
+                const std::size_t o = static_cast<std::size_t>(j) * N + n;
+                gSY_[o] = s;
+                gY1_[o] = sigY_[n + 1] * s;
+                gY2_[o] = sigY_[n + 1] * kn * kn * s;
+                gY3_[o] = sigY_[n + 1] * kn * c;
             }
         }
     }
-    const std::size_t T = static_cast<std::size_t>(M_) * ny;
+    const std::size_t T = M * static_cast<std::size_t>(ny);
     for (auto& t : gT_) t.resize(T);
     Real *Tw = gT_[0].data(), *Tv = gT_[1].data(), *T1 = gT_[2].data(), *T2 = gT_[3].data(), *T3 = gT_[4].data();
-    for (int m = 1; m <= M_; ++m) {
-        const Real* q = &q_[(m - 1) * N_];
-        const Real* v = &v_[(m - 1) * N_];
-        for (int j = 0; j < ny; ++j) {
-            const Real* sy = &gSY_[j * (N_ + 1)];
-            const Real* cy = &gCY_[j * (N_ + 1)];
-            Real aw = 0, av = 0, a1 = 0, a2 = 0, a3 = 0;
-            for (int n = 1; n <= N_; ++n) {
-                if (w) aw += q[n - 1] * sy[n];
-                if (wdot) av += v[n - 1] * sy[n];
-                if (k) {
-                    const Real qs = q[n - 1] * sigY_[n];
-                    const Real kn = n * kPi / b_;
-                    a1 += qs * sy[n];
-                    a2 += qs * kn * kn * sy[n];
-                    a3 += qs * kn * cy[n];
-                }
+    auto dotN = [N](const Real* a, const Real* b) {
+        Real s0 = 0, s1 = 0;
+        std::size_t n = 0;
+        for (; n + 1 < N; n += 2) { s0 += a[n] * b[n]; s1 += a[n + 1] * b[n + 1]; }
+        if (n < N) s0 += a[n] * b[n];
+        return s0 + s1;
+    };
+    for (int j = 0; j < ny; ++j) {
+        const std::size_t oy = static_cast<std::size_t>(j) * N;
+        for (std::size_t m = 0; m < M; ++m) {
+            const Real* q = &q_[m * N];
+            const std::size_t idx = static_cast<std::size_t>(j) * M + m;
+            if (w) Tw[idx] = dotN(q, &gSY_[oy]);
+            if (wdot) Tv[idx] = dotN(&v_[m * N], &gSY_[oy]);
+            if (k) {
+                T1[idx] = dotN(q, &gY1_[oy]);
+                T2[idx] = dotN(q, &gY2_[oy]);
+                T3[idx] = dotN(q, &gY3_[oy]);
             }
-            const std::size_t idx = static_cast<std::size_t>(m - 1) * ny + j;
-            Tw[idx] = aw;
-            Tv[idx] = av;
-            T1[idx] = a1;
-            T2[idx] = a2;
-            T3[idx] = a3;
         }
     }
+    auto dotM = [M](const Real* a, const Real* b) {
+        Real s0 = 0, s1 = 0;
+        std::size_t m = 0;
+        for (; m + 1 < M; m += 2) { s0 += a[m] * b[m]; s1 += a[m + 1] * b[m + 1]; }
+        if (m < M) s0 += a[m] * b[m];
+        return s0 + s1;
+    };
     for (int j = 0; j < ny; ++j) {
+        const std::size_t ot = static_cast<std::size_t>(j) * M;
         for (int i = 0; i < nx; ++i) {
-            const Real* sx = &gSX_[i * (M_ + 1)];
-            const Real* cx = &gCX_[i * (M_ + 1)];
-            Real ww = 0, vv = 0, wxx = 0, wyy = 0, wxy = 0;
-            for (int m = 1; m <= M_; ++m) {
-                const std::size_t idx = static_cast<std::size_t>(m - 1) * ny + j;
-                if (w) ww += sx[m] * Tw[idx];
-                if (wdot) vv += sx[m] * Tv[idx];
-                if (k) {
-                    const Real km = m * kPi / a_;
-                    const Real sm = sigX_[m] * sx[m];
-                    wxx -= km * km * sm * T1[idx];
-                    wyy -= sm * T2[idx];
-                    wxy += km * sigX_[m] * cx[m] * T3[idx];
-                }
-            }
-            const std::size_t o = static_cast<std::size_t>(j) * nx + i;
-            if (w) w[o] = ww;
-            if (wdot) wdot[o] = vv;
-            if (k) k[o] = {-wxx, -wyy, -wxy};
+            const std::size_t ox = static_cast<std::size_t>(i) * M, o = static_cast<std::size_t>(j) * nx + i;
+            if (w) w[o] = dotM(&gSX_[ox], &Tw[ot]);
+            if (wdot) wdot[o] = dotM(&gSX_[ox], &Tv[ot]);
+            // w_xx = -sum km^2 sigX sx T1, w_yy = -sum sigX sx T2, w_xy = sum km sigX cx T3.
+            if (k) k[o] = {-dotM(&gXX_[ox], &T1[ot]), -dotM(&gXS_[ox], &T2[ot]), -dotM(&gXY_[ox], &T3[ot])};
         }
     }
 }

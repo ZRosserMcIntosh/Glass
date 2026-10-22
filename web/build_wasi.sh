@@ -16,12 +16,19 @@ for f in gls_text gls_text_length gls_load gls_resolve gls_error_text gls_catalo
          gls_select gls_free_pane gls_blast gls_new_pane_sized gls_fire_as gls_drop_fragment gls_fragment_sheet gls_carried_sheet gls_sheet_mass gls_tone gls_tone_level gls_stress_strength gls_mode_hz gls_tone_swing gls_drop_new gls_drop_snip gls_drop_strike gls_drop_advance gls_drop_state gls_drop_fragments gls_drop_radius gls_drop_residual gls_nickel_sulfide gls_score_begin gls_score_point gls_score_end; do
   EXPORTS="$EXPORTS -Wl,--export=$f"
 done
-"$WASI_SDK/bin/clang++" --target=wasm32-wasip1 --sysroot="$WASI_SDK/share/wasi-sysroot" \
-  -std=c++20 -O2 -fno-exceptions -fno-rtti -Wall -Wextra -mexec-model=reactor \
-  -I"$REPO/src/core/include" \
-  "$HERE/glass_web.cpp" "$REPO"/src/core/src/*.cpp \
-  $EXPORTS -Wl,--initial-memory=67108864 -Wl,--max-memory=1073741824 -Wl,--strip-all \
-  -o "$OUT/glass.wasm"
+# Two builds: glass.wasm uses WebAssembly SIMD (about 1.4x faster),
+# glass-scalar.wasm is for browsers without it. The core's sums keep their
+# order and there is no fused multiply-add in wasm, so both give bit-identical
+# results: a pane breaks the same way in either.
+build() {
+  "$WASI_SDK/bin/clang++" --target=wasm32-wasip1 --sysroot="$WASI_SDK/share/wasi-sysroot" \
+    -std=c++20 -O3 -flto "$@" -fno-exceptions -fno-rtti -Wall -Wextra -mexec-model=reactor \
+    -I"$REPO/src/core/include" \
+    "$HERE/glass_web.cpp" "$REPO"/src/core/src/*.cpp \
+    $EXPORTS -Wl,--initial-memory=67108864 -Wl,--max-memory=1073741824 -Wl,--strip-all
+}
+build -msimd128 -o "$OUT/glass.wasm"
+build -o "$OUT/glass-scalar.wasm"
 cp "$HERE/glass_loader.mjs" "$OUT/glass.mjs"
 # One library file for the page: materials, glazings and impactors.
 node -e '

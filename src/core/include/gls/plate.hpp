@@ -82,6 +82,9 @@ public:
     Curvature curvature(Vec2 p) const { return curvature(p.x, p.y); }
     // Slopes of the velocity field (rad/s) for fragment spin.
     Vec2 velocityGradient(Real x, Real y) const;
+    // Both at once (one basis evaluation): the velocity and its slopes.
+    struct Motion { Real velocity; Vec2 gradient; };
+    Motion motion(Real x, Real y) const;
 
     // Fields on an nx x ny lattice spanning the pane edge to edge (row major,
     // x fastest). Any output pointer may be null.
@@ -116,7 +119,7 @@ private:
 
     Real a_ = 1, b_ = 1, D_ = 1, rhoH_ = 1, nu_ = 0.22, zeta_ = 0.01, resolution_ = 0.05;
     int M_ = 0, N_ = 0;
-    std::vector<Real> q_, v_, f_, omega_, sigX_, sigY_;
+    std::vector<Real> q_, v_, f_, omega_, sigX_, sigY_, kX_, kY_;
     Real modalMass_ = 1;
     // Exact-step coefficients for the last dt.
     Real cacheDt_ = -1;
@@ -126,7 +129,7 @@ private:
     std::vector<Real> patch_;  // disc-load factors 2 J1(kr)/(kr) for patchR_
     Real patchR_ = -1;
     mutable int gNx_ = 0, gNy_ = 0;
-    mutable std::vector<Real> gSX_, gCX_, gSY_, gCY_, gT_[5];
+    mutable std::vector<Real> gSX_, gXX_, gXS_, gXY_, gSY_, gY1_, gY2_, gY3_, gT_[5];
 };
 
 // Westergaard's equivalent load radius for thick-plate contact.

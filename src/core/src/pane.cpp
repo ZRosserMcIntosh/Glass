@@ -295,6 +295,7 @@ int Pane::advance(Real t, int maxSteps) {
         step(dt);
         ++steps;
     }
+    frags_.syncClumps();
     return steps;
 }
 
@@ -367,10 +368,6 @@ void Pane::step(Real dt) {
     // between), not at the microsecond steps of the fracture.
     constexpr Real kFragmentStep = 0.5e-3;
     if (time_ - fragTime_ >= kFragmentStep) {
-        for (int i = 0; i < static_cast<int>(frags_.fragments().size()); ++i) {
-            const Fragment& f = frags_.fragments()[i];
-            if (!f.retired && f.state == FragmentState::Pending && time_ >= f.releaseTime) releaseFragment(i);
-        }
         const Real pf = blastPressure(time_);
         if (std::fabs(pf) > kBlastHold) blowOut(pf);
         while (time_ - fragTime_ >= kFragmentStep) {
@@ -2073,10 +2070,9 @@ void Pane::freezeCheck() {
             Fragment& f = frags_.fragments()[i];
             if (f.chip || f.retired || f.bornAt != time_) continue;
             const Vec2 c = f.origin;
-            const Real wd = plate_.velocity(c.x, c.y);
-            const Vec2 gr = plate_.velocityGradient(c.x, c.y);
-            f.vel = {0, 0, wd};
-            f.omega = {gr.y, -gr.x, 0};
+            const auto mo = plate_.motion(c.x, c.y);
+            f.vel = {0, 0, mo.velocity};
+            f.omega = {mo.gradient.y, -mo.gradient.x, 0};
             bool pushed = false;
             // Pieces under an object still driving into the glass go with it
             // (it can craze the pane before it has punched its hole).
