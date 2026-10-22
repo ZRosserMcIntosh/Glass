@@ -290,6 +290,20 @@ flaw had failed there (critical diameter 2π (K_Ic / 2σ_t)², 0.35 mm for the
 drive it. A pane that broke by itself is not "quiet" until its cracks have been
 cut into pieces.
 
+## 8c. Scoring (a glass cutter)
+
+`Pane::score(line, closed, back, vent)` (`gls_score_*`): a cutter's score as a
+vent crack of depth c (12 % of the ply by default) along a polyline or loop.
+It is checked with the flaw probes, every 4 mm along it, and gives way where
+the tension across it first beats K_Ic / (1.12 √(πc)) (no loading-rate factor:
+the vent fails at K_Ic itself); a crack then starts there along it, both ways.
+A tip within 1.5 cells (3 mm) of a score, heading within 60° of it, is steered
+onto it, runs on at 0.6 K_Ic (estimated), does not wander or fork, and may turn
+as tightly as the score does, so a scored circle comes out as a disc. The
+Hertzian cone check now compares the edge tension with the one at Auerbach's
+load under a hard (steel) ball of the same radius, so a soft ball (a rubber
+mallet) does not start cones.
+
 ## 9. Prince Rupert's drop
 
 `RupertDrop` (`gls/rupert.hpp`, `gls_drop_*` in the browser) is a body of

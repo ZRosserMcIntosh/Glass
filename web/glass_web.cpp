@@ -447,6 +447,17 @@ GLS_EXPORT double gls_mode_hz(int m, int n) {
     return S.pane->plate().modeHz(m, n);
 }
 
+// A glass cutter's score: begin, add its points (pane m), end (closed: a
+// loop; back: the back face). Returns the score's index, or -1.
+namespace { std::vector<Vec2> scoreLine; }
+GLS_EXPORT void gls_score_begin() { scoreLine.clear(); }
+GLS_EXPORT void gls_score_point(double x, double y) { scoreLine.push_back({x, y}); }
+GLS_EXPORT int gls_score_end(int closed, int back) {
+    Sim& S = sim();
+    if (!S.pane) return -1;
+    return S.pane->score(scoreLine, closed != 0, back != 0);
+}
+
 // A nickel-sulfide stone of `diameterMm` at pane point (x, y), years after
 // tempering. Returns 1 if it broke the pane; what happened goes to the text buffer.
 GLS_EXPORT int gls_nickel_sulfide(double x, double y, double diameterMm) {

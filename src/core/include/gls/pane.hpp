@@ -248,6 +248,19 @@ public:
     // size is driven by the core tension, K = 2 sigma_t sqrt(a / pi); past
     // K_Ic the ply dices with nothing touching it. Returns whether it broke.
     bool nickelSulfide(Vec2 at, Real diameter);
+    // A glass cutter's score along `line` (pane points, m) on the front face
+    // (or the back): a scratch with a vent crack under it, of depth `vent`
+    // (<= 0: 12 % of the ply, a wheel cutter's). It fails at the tension that
+    // drives that vent at K_Ic, K_Ic / (1.12 sqrt(pi c)) (about 14 MPa for
+    // 6 mm glass, against 100+ MPa elsewhere), and a running crack that meets
+    // it follows it. Closed: a loop (a circle cutter). Returns its index.
+    int score(const std::vector<Vec2>& line, bool closed, bool backFace = false, Real vent = -1);
+    struct Score {
+        std::vector<Vec2> pts;
+        bool closed = false, back = false, started = false;
+        Real strength = 0;  // Pa
+    };
+    const std::vector<Score>& scores() const { return scores_; }
     // Starts, retunes or stops (level 0) a steady tone.
     void tone(const ToneLoad& t);
     const ToneLoad& toneTarget() const { return tone_; }
@@ -336,6 +349,11 @@ private:
     std::vector<Hole> holes_;
     std::vector<BlastLoad> blasts_;
     Real blastOnset_ = -1;  // s, when a blast first loaded the pane
+    std::vector<Score> scores_;
+    void scoreChecks();
+    // The nearest point of a score on ply g within `reach` of p: its tangent
+    // (oriented along `dir`) and the point. False if none.
+    bool scoreNear(int g, Vec2 p, Vec2 dir, Real reach, Vec2& point, Vec2& tangent) const;
     ToneLoad tone_;
     Real toneAmp_ = 0, tonePhase_ = 0, toneOnset_ = -1;
     Real meterRatio_ = 0, meterStress_ = 0, meterStrength_ = 0;

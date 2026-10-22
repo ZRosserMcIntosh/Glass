@@ -32,7 +32,7 @@ pressure). [docs/integration.md](docs/integration.md) shows the coupling.
 | Any device | Five tiers (potato to ultra) change resolution, not physics: plate modes, crack grid, tip and piece budgets. Results do not depend on how the host chops its frames | `tests/test_fracture.cpp` (same outcome on every tier; frame-rate independence) |
 | Browser | WebAssembly build (wasi-sdk, no exceptions or RTTI, 310 KB) with a C ABI; Node smoke test | `web/`, `web/smoke_test.mjs` |
 
-71 test cases, on Linux (gcc, clang, sanitizers), macOS, Windows and WASM in CI.
+72 test cases, on Linux (gcc, clang, sanitizers), macOS, Windows and WASM in CI.
 What each scenario gives against its standard is in
 [docs/validation.md](docs/validation.md); how far each model goes, and its
 main gap, in [docs/physics.md](docs/physics.md).
@@ -42,7 +42,7 @@ main gap, in [docs/physics.md](docs/physics.md).
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-./build/tests/gls_tests                  # 71 test cases
+./build/tests/gls_tests                  # 72 test cases
 ./build/tests/gls_tests "UL 752"         # a filter
 ./build/glassdemo validate               # the scenario table
 ./build/glassdemo run windscreen steel_ball_2260 8.86 --svg out.svg   # one shot, its event log and an SVG of the cracks

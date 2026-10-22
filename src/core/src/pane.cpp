@@ -37,6 +37,7 @@ constexpr Real kMushroom = 0.3;            // ballistic nose flattening coeffici
 constexpr Real kPushRadius = 1.2;          // pushed-glass radius / impactor radius
 constexpr Real kConeDrive = 50;            // energy to drive a cone through / its surface energy
 constexpr Real kAuerbach = 5e4;            // N/m: Hertzian cone load / ball radius (Auerbach's law)
+constexpr Real kAuerbachBallE = 200e9;     // Pa: the hard (steel, carbide) balls Auerbach's law is measured with
 constexpr Real kWedgeStiffness = 1.0;      // wedge ring stiffness / (2 pi D / L^2)
 constexpr Real kRadialDrive = 1.0;         // hoop stress at radial tips / wedge-root stress
 constexpr Real kCrushRagged = 0.14;        // amplitude of the crushed zone's ragged edge (of its radius)
@@ -52,6 +53,12 @@ constexpr Real kLaminateWedgeSupport = 0.15; // the same for wedges bonded to an
 constexpr Real kMembraneRatio = 0.3;
 constexpr Real kEdgeBond = 1e6;            // Pa: a sealant bond at break over the bite (structural silicone ~0.7-1 MPa)
 constexpr Real kWrapPiece = 0.06;          // m: bonded glass folded round an impactor breaks to pieces this size
+// Along a score the vent has already cut part of the way through: a crack
+// following it runs on at this share of the toughness. Estimated.
+constexpr Real kScoreEase = 0.6;
+// A wheel cutter's vent goes 10-20 % of the way through (estimated from the
+// scoring literature); 12 % taken.
+constexpr Real kScoreVent = 0.12;
 constexpr Real kShakerRadius = 0.01;        // m, the foot of a shaker (Chladni drive)
 constexpr Real kToneStepsPerCycle = 32;    // steps per cycle of a tone (the force is held over each)
 constexpr Real kToneProbesPerCycle = 24;   // flaw checks per cycle (catches the peak to within 1 %)
@@ -341,6 +348,7 @@ void Pane::step(Real dt) {
     if (toned && !dynamic) probeEvery = 1 / (kToneProbesPerCycle * std::max(tone_.frequency, 1.0));
     if ((dynamic || toned) && time_ - lastProbe_ >= probeEvery) {
         probeChecks();
+        if (!scores_.empty()) scoreChecks();
         if (toned) toneMeterCheck();
         lastProbe_ = time_;
     }
@@ -938,7 +946,10 @@ void Pane::loadPointChecks(int k) {
         const Real R = I.def.contactCurvature();
         const Real scatter = I.coneStrength / (gm.weibullScale * std::pow(1.0 / 2e-7, 1.0 / gm.weibullModulus));
         const Real Fc = kAuerbach * R * clampr(scatter, 0.5, 2.0);
-        const Real aC = std::cbrt(3 * Fc * R / (4 * contactModulus(I.def.youngs, I.def.poisson, gm.youngs, gm.poisson)));
+        // The tension a cone needs is the one at the Auerbach load under the hard
+        // (steel) balls the law was measured with: a soft ball spreads the same
+        // force over a wide contact and never gets there.
+        const Real aC = std::cbrt(3 * Fc * R / (4 * contactModulus(std::max(I.def.youngs, kAuerbachBallE), 0.3, gm.youngs, gm.poisson)));
         const Real sH = hertzEdgeTension(F, a, gm.poisson) - G.surfaceCompression;
         if (F >= Fc && sH >= hertzEdgeTension(Fc, aC, gm.poisson)) {
             I.cone = true;
@@ -1300,6 +1311,7 @@ void Pane::growCracks(Real dt) {
         }
         const int shieldCells = std::max(4, static_cast<int>(std::lround(1.5 * h / cell)));
         const std::size_t n0 = net.tips().size();
+        std::vector<char> guidedTip(scores_.empty() ? 0 : n0, 0);
         for (std::size_t i = 0; i < n0; ++i) {
             if (!net.tips()[i].alive) continue;
             {
@@ -1353,6 +1365,20 @@ void Pane::growCracks(Real dt) {
                 } else {
                     ++tip.evalAge;
                 }
+                // A crack that meets a score follows it: the vent under the
+                // scratch has already cut part of the way through.
+                bool guided = false;
+                if (!scores_.empty() && !tip.fixedStress && tip.kind != CrackKind::Dicing) {
+                    Vec2 q, t;
+                    const Real reach = std::max(3e-3, 1.5 * cell);
+                    if (scoreNear(static_cast<int>(g), tip.pos, tip.dir, reach, q, t) && dot(t, tip.dir) > 0.5) {
+                        const Vec2 want = normalize(t + (q - tip.pos) * (1.0 / reach));
+                        tip.kink = std::atan2(cross(tip.dir, want), dot(tip.dir, want));
+                        tip.wob = 0;
+                        guided = true;
+                        guidedTip[i] = 1;
+                    }
+                }
                 if (!tip.fixedStress && tip.kind != CrackKind::Dicing) {
                     // A crack running close alongside another is unloaded by it;
                     // one cell away they coalesce.
@@ -1368,7 +1394,7 @@ void Pane::growCracks(Real dt) {
                 // Arrest (dormant) when the stress intensity over the plate's depth drops
                 // below K_Ic; otherwise run at a speed rising toward the terminal velocity.
                 const Real K = tip.stress * tip.shield * std::sqrt(kPi * lcap);
-                if (K < m.toughness) {
+                if (K < m.toughness * (guided ? kScoreEase : 1.0)) {
                     if (tip.fixedStress) { net.kill(static_cast<int>(i), t1); continue; }
                     tip.dormant = true;
                     tip.speed = 0;
@@ -1381,17 +1407,17 @@ void Pane::growCracks(Real dt) {
                 tip.speed = v;
                 const Real ds = v * dt;
                 // The kink develops over about a plate thickness of growth.
-                Real turn = tip.kink * std::min(1.0, ds / (tip.fixedStress ? cell : h));
+                Real turn = tip.kink * std::min(1.0, ds / (tip.fixedStress || guided ? cell : h));
                 // A running crack keeps its heading: it bends, it does not hook
                 // round (sharp changes of direction come as forks).
-                if (!tip.fixedStress && tip.kind != CrackKind::Dicing)
+                if (!tip.fixedStress && tip.kind != CrackKind::Dicing && !guided)
                     turn = clampr(turn, -ds / kMinTurnRadius, ds / kMinTurnRadius);
                 tip.kink -= turn;
-                const Real noise = tip.kind == CrackKind::Dicing ? 0.09 : (tip.fixedStress ? 0.02 : 0.035);
+                const Real noise = tip.kind == CrackKind::Dicing ? 0.09 : (tip.fixedStress || guided ? 0.0 : 0.035);
                 turn += rng_.normal() * noise * std::sqrt(ds / cell);
                 // Glass is not perfectly uniform: a running crack wanders a few
                 // degrees either side of where the stress points it, slowly.
-                if (tip.kind != CrackKind::Dicing && !tip.fixedStress)
+                if (tip.kind != CrackKind::Dicing && !tip.fixedStress && !guided)
                     tip.wob += -tip.wob * ds / kWanderLength +
                                kWanderAngle * std::sqrt(2 * ds / kWanderLength) * rng_.normal();
                 tip.dir = rotate(tip.dir, turn);
@@ -1406,7 +1432,8 @@ void Pane::growCracks(Real dt) {
             else
                 spacing = kBranchSpacing * sq(m.branching / std::max(se, 1.0));
             spacing = std::max(spacing, (tip.kind == CrackKind::Dicing ? 2 : 3) * cell);
-            if (se >= branchMin && tip.shield >= 1 && tip.sinceBranch >= spacing)
+            // (A crack following a score does not fork off it.)
+            if (se >= branchMin && tip.shield >= 1 && tip.sinceBranch >= spacing && (guidedTip.empty() || !guidedTip[i]))
                 net.branch(static_cast<int>(i), tip.kind == CrackKind::Dicing ? kDiceHalfAngle : kBranchHalfAngle, t1,
                            rng_);
         }
@@ -1609,6 +1636,88 @@ bool Pane::nickelSulfide(Vec2 at, Real diameter) {
         return true;
     }
     return false;
+}
+
+// ---- Scoring (a glass cutter) ----------------------------------------------------------------
+
+int Pane::score(const std::vector<Vec2>& line, bool closed, bool backFace, Real vent) {
+    if (line.size() < 2 || glass_.empty()) return -1;
+    Score sc;
+    sc.pts = line;
+    sc.closed = closed;
+    sc.back = backFace;
+    const GlassPly& G = backFace ? glass_.back() : glass_.front();
+    if (vent <= 0) vent = kScoreVent * (G.z1 - G.z0);
+    sc.strength = G.mat->toughness / (1.12 * std::sqrt(kPi * vent)) - G.surfaceCompression;
+    scores_.push_back(sc);
+    Real len = 0;
+    for (std::size_t i = 1; i < line.size(); ++i) len += length(line[i] - line[i - 1]);
+    if (closed) len += length(line.front() - line.back());
+    log(fmt("scored %.0f mm of the ", 1e3 * len) + (backFace ? "back" : "front") +
+        fmt(" face: the %.2f mm vent under it gives at %.0f MPa", 1e3 * vent, sc.strength / 1e6));
+    return static_cast<int>(scores_.size()) - 1;
+}
+
+bool Pane::scoreNear(int g, Vec2 p, Vec2 dir, Real reach, Vec2& point, Vec2& tangent) const {
+    Real best = reach;
+    bool found = false;
+    for (const auto& sc : scores_) {
+        const int ply = sc.back ? static_cast<int>(glass_.size()) - 1 : 0;
+        if (ply != g) continue;
+        const std::size_t n = sc.pts.size(), segs = sc.closed ? n : n - 1;
+        for (std::size_t i = 0; i < segs; ++i) {
+            const Vec2 a = sc.pts[i], b = sc.pts[(i + 1) % n], ab = b - a;
+            const Real L2 = dot(ab, ab);
+            if (L2 <= 0) continue;
+            const Real u = clampr(dot(p - a, ab) / L2, 0.0, 1.0);
+            const Vec2 q = a + ab * u;
+            const Real d = length(p - q);
+            if (d >= best) continue;
+            Vec2 t = ab * (1 / std::sqrt(L2));
+            if (dot(t, dir) < 0) t = -t;
+            best = d;
+            point = q;
+            tangent = t;
+            found = true;
+        }
+    }
+    return found;
+}
+
+// A score fails where the tension across it first beats what its vent holds:
+// a crack starts there along it, both ways.
+void Pane::scoreChecks() {
+    // A vent already there fails at K_Ic itself: no flaw to grow first, so no loading-rate factor.
+    for (auto& sc : scores_) {
+        if (sc.started) continue;
+        const int g = sc.back ? static_cast<int>(glass_.size()) - 1 : 0;
+        GlassPly& G = glass_[g];
+        if (G.fragmented) continue;
+        const std::size_t n = sc.pts.size(), segs = sc.closed ? n : n - 1;
+        Real worst = 0;
+        Vec2 at, along;
+        for (std::size_t i = 0; i < segs; ++i) {
+            const Vec2 a = sc.pts[i], b = sc.pts[(i + 1) % n];
+            const Real L = length(b - a);
+            if (L <= 0) continue;
+            const Vec2 t = (b - a) * (1 / L);
+            const int k = std::max(1, static_cast<int>(L / 0.004));
+            for (int j = 0; j < k; ++j) {
+                const Vec2 p = a + (b - a) * ((j + 0.5) / k);
+                const PlaneStress st = stressFromCurvature(g, sc.back, curvatureAt(p), nearFieldAt(p));
+                const Real across = st.normalAcross(t) - sc.strength;
+                if (across > worst) { worst = across; at = p; along = t; }
+            }
+        }
+        if (worst <= 0) continue;
+        sc.started = true;
+        lastDynamic_ = time_;
+        if (G.originTime < 0) { G.origin = at; G.originTime = time_; }
+        const std::uint32_t group = G.net.newGroup();
+        G.net.spawn(at, along, time_, CrackKind::Edge, group, 0, G.mat->crackSpeed);
+        G.net.spawn(at, -along, time_, CrackKind::Edge, group, 0, G.mat->crackSpeed);
+        log(fmt("the score gives way at (%.0f, %.0f) mm: a crack runs along it both ways", 1e3 * at.x, 1e3 * at.y));
+    }
 }
 
 // The loading-rate factor on strength for what loads the pane now: the

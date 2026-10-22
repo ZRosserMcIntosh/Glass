@@ -502,6 +502,39 @@ TEST_CASE("tempered: a big enough nickel-sulfide stone in the core breaks the pa
     CHECK(!annealed.nickelSulfide({0.45, 0.4}, 0.5e-3));
 }
 
+// ---- Scoring (a glass cutter) ---------------------------------------------------------------
+
+TEST_CASE("scoring: a circle scored and knocked from behind comes out as a disc") {
+    const auto& lib = glstest::library();
+    for (int tier : {1, 2}) {
+        Pane p(*lib.glazing("annealed_6"), budgetForTier(tier), 3);
+        const double W = p.glazing().width, H = p.glazing().height, r = 0.1;
+        std::vector<Vec2> circle;
+        for (int i = 0; i < 64; ++i) circle.push_back({W / 2 + r * std::cos(2 * kPi * i / 64), H / 2 + r * std::sin(2 * kPi * i / 64)});
+        CHECK(p.score(circle, true) == 0);
+        CHECK_RANGE(p.scores()[0].strength, 8e6, 25e6);   // the vent, against 100+ MPa elsewhere
+        // Knocked on the scored face it holds: bending closes a score on the side pushed.
+        Pane front(*lib.glazing("annealed_6"), budgetForTier(tier), 3);
+        front.score(circle, true);
+        front.fire(*lib.impactor("rubber_mallet"), {W / 2, H / 2}, 5, 0, 0, false, 0.05);
+        front.advance(0.2);
+        CHECK(!front.status().cracked);
+        // From behind it opens: the crack runs round the score and the disc comes away.
+        p.fire(*lib.impactor("rubber_mallet"), {W / 2, H / 2}, 5, 0, 0, true, 0.05);
+        p.advance(0.3);
+        int pieces = 0;
+        double disc = 0;
+        for (const auto& f : p.fragments().fragments())
+            if (!f.retired && !f.chip) {
+                ++pieces;
+                if (f.area < 0.2) disc = std::max(disc, f.area);
+            }
+        std::cout << "    tier " << tier << ": " << pieces << " pieces, the disc " << 1e4 * disc << " cm2 of " << 1e4 * kPi * r * r << "\n";
+        CHECK(pieces <= 4);
+        CHECK_RANGE(disc, 0.8 * kPi * r * r, 1.2 * kPi * r * r);
+    }
+}
+
 // ---- Resonance ----------------------------------------------------------------------------
 
 namespace {
