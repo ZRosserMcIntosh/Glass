@@ -144,6 +144,136 @@ TEST_CASE("plate: a short pulse only bends the plate near the load (flexural rea
     CHECK(nfShort > 0 && nfShort < 0.6 * nfLong);
 }
 
+// ---- Large deflection (membrane action) ---------------------------------------------
+
+namespace {
+// A simply supported glass plate, a = 1 m along x and b = beta a, h = 6 mm,
+// settled under the uniform pressure that makes p a^4 / (E h^4) = Q: centre
+// deflection / h, the largest principal stress of either face (sigma a^2 /
+// (E h^2)) and where it is (x / a, y / b), and the largest at the centre.
+struct Bent {
+    double w = 0, s = 0, x = 0, y = 0, centre = 0;
+};
+Bent bend(double beta, double Q, int stretchModes = 36, int modes = 32) {
+    const double E = 72e9, nu = 0.22, h = 0.006, a = 1, b = beta;
+    const double Qm = E / (1 - nu * nu);
+    ModalPlate p;
+    p.configure(a, b, Qm * h * h * h / 12, 2500 * h, nu, 0.01, modes, static_cast<int>(std::lround(modes * beta)));
+    p.configureStretch(Qm * h, nu, h, stretchModes);
+    p.addPressure(Q * E * std::pow(h, 4) / std::pow(a, 4));
+    p.settleStatic();
+    const int nx = 161, ny = static_cast<int>(std::lround(160 * beta)) + 1;
+    std::vector<Curvature> k(static_cast<std::size_t>(nx) * ny);
+    std::vector<PlaneStrain> e(k.size());
+    p.sampleGrid(nx, ny, nullptr, nullptr, k.data(), e.data());
+    Bent r;
+    r.w = p.deflection(a / 2, b / 2) / h;
+    r.s = -1e30;
+    for (int j = 0; j < ny; ++j)
+        for (int i = 0; i < nx; ++i) {
+            const Curvature& c = k[static_cast<std::size_t>(j) * nx + i];
+            const PlaneStrain& m = e[static_cast<std::size_t>(j) * nx + i];
+            for (const double z : {-h / 2, h / 2}) {
+                const PlaneStress st{Qm * (z * (c.kxx + nu * c.kyy) + m.exx + nu * m.eyy),
+                                     Qm * (z * (c.kyy + nu * c.kxx) + m.eyy + nu * m.exx),
+                                     Qm * (1 - nu) * (z * c.kxy + 0.5 * m.gxy)};
+                double s1, s2, ang;
+                st.principal(s1, s2, ang);
+                s1 *= a * a / (E * h * h);
+                if (s1 > r.s) r.s = s1, r.x = static_cast<double>(i) / (nx - 1), r.y = static_cast<double>(j) / (ny - 1);
+                if (i == nx / 2 && j == ny / 2) r.centre = std::max(r.centre, s1);
+            }
+        }
+    return r;
+}
+
+// The converged finite-difference solution of von Kármán's equations
+// (tools/vonkarman: Airy stress function, edges simply supported and free to
+// slide in their plane, nu = 0.22; two grids, Richardson-extrapolated).
+// atCorner: the peak is within 3 % of the sides from a corner, else at the centre.
+struct VonKarman {
+    double beta, Q, w, s, centre;
+    bool atCorner;
+};
+constexpr VonKarman kVonKarman[] = {
+    {1, 10, 0.447, 2.748, 2.748, false},       {1, 100, 2.387, 17.025, 14.269, true},
+    {1, 200, 3.417, 31.129, 19.400, true},     {1, 400, 4.776, 57.730, 26.102, true},
+    {4.0 / 3, 20, 1.231, 6.898, 6.898, false}, {4.0 / 3, 200, 4.612, 38.483, 22.220, true},
+    {4.0 / 3, 400, 6.389, 72.359, 32.910, true}, {2, 10, 1.077, 5.603, 5.603, false},
+    {2, 100, 5.168, 26.433, 23.798, true},
+};
+
+// ASTM E1300's centre deflection of four-sided simply supported glass, its fit
+// to the nonlinear analysis behind its charts: w = t exp(r0 + r1 x + r2 x^2),
+// x = ln(ln(q (a b)^2 / (E t^4))), AR = long / short side.
+double e1300(double Q, double beta) {
+    const double AR = std::max(beta, 1 / beta), x = std::log(std::log(Q * beta * beta));
+    const double r0 = 0.553 - 3.83 * AR + 1.11 * AR * AR - 0.0969 * AR * AR * AR;
+    const double r1 = -2.29 + 5.83 * AR - 2.17 * AR * AR + 0.2067 * AR * AR * AR;
+    const double r2 = 1.485 - 1.908 * AR + 0.815 * AR * AR - 0.0822 * AR * AR * AR;
+    return std::exp(r0 + r1 * x + r2 * x * x);
+}
+}  // namespace
+
+TEST_CASE("plate: bent past its thickness, the pane stretches as von Karman's plate does: deflection, peak stress and where") {
+    for (const auto& r : kVonKarman) {
+        const Bent b = bend(r.beta, r.Q);
+        std::cout << "    b/a " << r.beta << ", p a^4/(E h^4) " << r.Q << ": w/h " << b.w << " (" << r.w << "), peak "
+                  << b.s << " (" << r.s << ") at " << b.x << ", " << b.y << "; centre " << b.centre << " (" << r.centre << ")\n";
+        CHECK_NEAR(b.w, r.w, 0.01 * r.w);
+        CHECK_RANGE(b.s / r.s, 0.93, 1.02);
+        CHECK_NEAR(b.centre, r.centre, 0.03 * r.centre);
+        if (r.atCorner) CHECK(std::min(b.x, 1 - b.x) < 0.06 && std::min(b.y, 1 - b.y) < 0.06);
+        else CHECK(std::fabs(b.x - 0.5) < 0.1 && std::fabs(b.y - 0.5) < 0.1);
+    }
+    // The linear plate is far off by then: nearly four times the deflection.
+    const Bent b = bend(1, 400);
+    CHECK(0.00406 * 12 * (1 - 0.22 * 0.22) * 400 > 3.5 * b.w);
+}
+
+TEST_CASE("plate: the stretched pane's centre deflection follows ASTM E1300's nonlinear fit") {
+    for (const double beta : {1.0, 4.0 / 3, 2.0})
+        for (const double Q : {40.0, 100.0, 200.0, 400.0}) {
+            const Bent b = bend(beta, Q);
+            CHECK_NEAR(b.w, e1300(Q, beta), (beta > 1.5 ? 0.045 : 0.025) * b.w);
+        }
+}
+
+TEST_CASE("plate: a swinging pane stiffens as it bends (hardening), whatever the step") {
+    // 2 mm glass, 0.30 x 0.25 m, let go from a static bend of about twice its thickness.
+    const double E = 72e9, nu = 0.22, h = 0.002, a = 0.3, b = 0.25, Qm = E / (1 - nu * nu);
+    double freq[2] = {0, 0};
+    for (int run = 0; run < 2; ++run) {
+        const double dt = run ? 5e-4 : 2e-5;
+        ModalPlate p;
+        p.configure(a, b, Qm * h * h * h / 12, 2500 * h, nu, 0.0, 16, 13);
+        p.configureStretch(Qm * h, nu, h, 36);
+        p.addPressure(13e3);
+        p.settleStatic();
+        CHECK_RANGE(p.deflection(a / 2, b / 2) / h, 1.5, 2.5);
+        p.clearForces();
+        const double e0 = p.energy();
+        double prev = p.deflection(a / 2, b / 2), first = -1, last = -1, emin = 1e30, emax = 0;
+        int crossings = 0;
+        for (double t = 0; t < 0.1; t += dt) {
+            p.step(dt);
+            const double w = p.deflection(a / 2, b / 2);
+            if (prev > 0 && w <= 0) {
+                if (first < 0) first = t;
+                last = t;
+                ++crossings;
+            }
+            prev = w;
+            emin = std::min(emin, p.energy()), emax = std::max(emax, p.energy());
+        }
+        freq[run] = (crossings - 1) / (last - first);
+        CHECK_RANGE(freq[run] / p.fundamentalHz(), 1.1, 1.35);  // single-mode Duffing estimate for sliding edges: ~1.2
+        CHECK_RANGE(emin / e0, 0.95, 1.0);  // the split keeps the energy (to the membrane share's lag)
+        CHECK_RANGE(emax / e0, 1.0, 1.05);
+    }
+    CHECK_NEAR(freq[1], freq[0], 0.01 * freq[0]);
+}
+
 TEST_CASE("contact: Hertz impact on a rigid wall matches the analytic contact time") {
     // t_c = 2.94 delta_max / v,  delta_max = (15 m v^2 / (16 E* sqrt R))^(2/5)
     const double m = 0.227, R = 0.019, v = 3, Es = contactModulus(210e9, 0.3, 72e9, 0.22);

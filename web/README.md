@@ -44,6 +44,11 @@ the layouts itself (a worker copying them out, say).
 | `gls_blast_point(detonation, charge, x, y, standoff, side, scale, gasPeak, gasRise, gasTau)` | a charge of `charge` kg TNT going off at engine time `detonation`, at pane point (x, y) projected on the pane's plane and `standoff` m from it: every point of the glass gets its own arrival, peak (reflected head-on, side-on at grazing) and positive phase from free-air TNT (Kinney & Graham), so the glass nearest the charge is hit first and hardest; `side` +1 pushes toward the back face, `scale` multiplies the shock's peak; the room's gas as for `gls_blast` |
 | `gls_fire_body(index, x, y, speed, yaw, pitch, fromBack, lead, mass, radius, kind, youngs, poisson, restitution)` | fires a blunt body made up on the spot (built on impactor `index`): its mass, nose radius, kind (0 sphere, 2 flat), and the elastic constants and restitution of what leads; a host of several panes fires a sheet ripped out of one into the next this way |
 | `G.fragmentSheets(n)` | int32 per fragment record: the bonded sheet (clump) it is part of, −1 none |
+| `gls_tone(frequency, level, ramp, shaker, x, y)` | a steady note at the pane: peak level at the glass (Pa of sound, or N from a shaker at x, y), following a new level with time constant `ramp`; retuning keeps the phase; level 0 fades it out |
+| `gls_tone_glide(rate, to)` | glides the note at `rate` Hz/s on engine time until it reaches `to` Hz (0: no stop): a pane bent past its thickness stiffens, so its resonance climbs with the swing and a fixed note falls off it |
+| `gls_tone_frequency()`, `gls_tone_level()`, `gls_tone_swing()` | the note's frequency and level now, and the antinode swing (m) |
+| `gls_stress_strength()` | 3 doubles: the highest share of its own strength any flaw has seen since the last call, that flaw's tension and its strength (Pa) |
+| `gls_mode_hz(m, n)` | natural frequency of plate mode (m, n), small swings |
 
 Positions are in the pane frame: x along the width, y up from the bottom edge,
 z into the glass from the struck face, metres.
