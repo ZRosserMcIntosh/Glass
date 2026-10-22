@@ -27,6 +27,7 @@ add_library(gls_core
   src/core/src/json.cpp
   src/core/src/library.cpp
   src/core/src/plate.cpp
+  src/core/src/stretch.cpp
   src/core/src/contact.cpp
   src/core/src/cracks.cpp
   src/core/src/fragments.cpp
@@ -43,6 +44,9 @@ if(GLS_BUILD_TOOLS)
   add_executable(glassdemo tools/glassdemo/main.cpp)
   target_link_libraries(glassdemo PRIVATE gls_core)
   target_compile_options(glassdemo PRIVATE ${GLS_WARNINGS})
+  # An independent finite-difference reference for the large-deflection plate.
+  add_executable(vonkarman tools/vonkarman/main.cpp)
+  target_compile_options(vonkarman PRIVATE ${GLS_WARNINGS})
 endif()
 
 if(GLS_BUILD_TESTS)

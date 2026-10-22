@@ -420,6 +420,22 @@ GLS_EXPORT int gls_tone(double frequency, double level, double ramp, int shaker,
     return 1;
 }
 
+// Glides the tone's note at `rate` Hz/s (+ up) until it reaches `to` Hz (0:
+// no stop), on engine time; rate 0 holds it. A pane bent past its thickness
+// stiffens, so its resonance climbs as it swings: a glide up can follow it.
+GLS_EXPORT int gls_tone_glide(double rate, double to) {
+    Sim& S = sim();
+    if (!S.pane) return 0;
+    ToneLoad t = S.pane->toneTarget();
+    t.sweep = rate;
+    t.sweepTo = to;
+    S.pane->tone(t);
+    return 1;
+}
+
+// The tone's frequency now (Hz; it moves while it glides), or 0.
+GLS_EXPORT double gls_tone_frequency() { return sim().pane ? sim().pane->toneTarget().frequency : 0; }
+
 // The tone's level now (it follows the target), or 0.
 GLS_EXPORT double gls_tone_level() { return sim().pane ? sim().pane->toneLevel() : 0; }
 

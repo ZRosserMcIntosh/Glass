@@ -527,28 +527,80 @@ TEST_CASE("resonance: a tone on the lowest mode builds the swing up by Q = 1 / (
     CHECK(!cracked(on));
 }
 
-TEST_CASE("resonance: loud enough on the right note breaks it; off the note it does not") {
+namespace {
+// Peak pressure at the glass of a tone of `dB` arriving square on (doubled by its reflection).
+double tonePa(double dB) { return 2 * std::sqrt(2.0) * 20e-6 * std::pow(10, dB / 20); }
+}  // namespace
+
+TEST_CASE("resonance: a note held at the small-swing fundamental detunes as the pane bends; gliding up stays on the bent peak") {
+    // A pane bent past its own thickness stretches in its plane and stiffens
+    // (a hardening, Duffing-type spring): its resonance climbs with the
+    // swing, so a fixed note falls off it, and a note gliding up rides it
+    // until the swing outgrows the peak and drops off (the jump).
     const auto& lib = glstest::library();
     const GlazingDef& g = *lib.glazing("picture_glass_2");
-    auto play = [&](double freqShare, double dB, double seconds, int chunks) {
-        Pane p(g, budgetForTier(1), 1);
+    const double h = g.plies[0].thickness;
+    Pane quiet(g, budgetForTier(0), 1), held(g, budgetForTier(0), 1), glide(g, budgetForTier(0), 1);
+    const double f1 = held.plate().fundamentalHz();
+    ToneLoad t;
+    t.level = 1;
+    t.frequency = 0.02 * f1;
+    const double perPa = toneSwing(quiet, t, 2 / t.frequency, 1 / t.frequency);  // quasi-static swing per Pa
+    t.level = tonePa(135);
+    const double linear = perPa * t.level / (2 * g.damping);  // what the linear plate swings to on the note
+    t.frequency = f1;
+    const double fixed = toneSwing(held, t, 1.5, 0.3);
+    // Glide from the small-swing note upward at a fifth of it per second.
+    t.sweep = 0.2 * f1;
+    t.sweepTo = 1.8 * f1;
+    glide.tone(t);
+    double top = 0, fTop = 0, end = 0;
+    for (double s = 0; s < 3.5; s += 1 / (40 * f1)) {
+        glide.advance(s);
+        const double w = std::fabs(glide.plate().deflection(0.5 * g.width, 0.5 * g.height));
+        if (w > top) top = w, fTop = glide.toneTarget().frequency;
+        if (s > 3.4) end = std::max(end, w);
+    }
+    std::cout << "    135 dB at " << f1 << " Hz: the linear plate " << linear / h << " h, held " << fixed / h
+              << " h; gliding up " << top / h << " h at " << fTop << " Hz, " << end / h << " h at the end\n";
+    CHECK(linear > 3 * h);
+    CHECK(fixed < 0.4 * linear);    // detuned: far below Q times the static swing
+    CHECK(top > 2 * fixed);         // the glide follows the climbing peak
+    CHECK(fTop > 1.3 * f1);         // ... to well above the small-swing note
+    CHECK(end < 0.5 * top);         // and falls off it once the swing outgrows it
+    CHECK(!cracked(held) && !cracked(glide));
+}
+
+TEST_CASE("resonance: loud, a held note leaves the pane whole; gliding up after its peak breaks it") {
+    const auto& lib = glstest::library();
+    const GlazingDef& g = *lib.glazing("picture_glass_2");
+    auto play = [&](double freqShare, double glide, double dB, double seconds, int chunks) {
+        Pane p(g, budgetForTier(0), 1);
         ToneLoad t;
         t.frequency = freqShare * p.plate().fundamentalHz();
-        t.level = 2 * std::sqrt(2.0) * 20e-6 * std::pow(10, dB / 20);  // peak, doubled by reflection at the glass
+        t.level = tonePa(dB);
+        t.sweep = glide * p.plate().fundamentalHz();
+        t.sweepTo = 1.8 * p.plate().fundamentalHz();
         p.tone(t);
-        double brokeAt = -1;
+        double brokeAt = -1, brokeHz = 0;
         for (int i = 1; i <= chunks && brokeAt < 0; ++i) {
             p.advance(seconds * i / chunks);
-            if (cracked(p)) brokeAt = p.time();
+            if (cracked(p)) brokeAt = p.time(), brokeHz = p.toneTarget().frequency;
         }
-        return brokeAt;
+        return std::pair{brokeAt, brokeHz / p.plate().fundamentalHz()};
     };
-    const double sung = play(1.0, 145, 2, 200);
+    // Held at the small-swing note, 145 dB detunes the pane and it holds (the
+    // linear plate swings to 15 thicknesses and breaks it in a fraction of a second).
+    CHECK(play(1.0, 0, 145, 2, 100).first < 0);
+    CHECK(play(0.8, 0, 145, 1, 50).first < 0);  // 20 % flat
+    // Gliding up a quarter of the note per second, it follows the peak and breaks the pane.
+    const auto [sung, at] = play(1.0, 0.25, 145, 3.2, 200);
+    std::cout << "    gliding at 145 dB: broke at " << sung << " s, " << at << " times the small-swing note\n";
     CHECK(sung > 0);
-    CHECK(play(0.8, 145, 2, 200) < 0);  // the same level 20 % flat
-    CHECK(play(1.0, 115, 2, 200) < 0);  // on the note, 30 dB quieter
+    CHECK(at > 1.3);
+    CHECK(play(1.0, 0.25, 125, 3.2, 100).first < 0);  // the same glide 20 dB quieter
     // Breaking does not depend on how the host chops its frames.
-    CHECK_NEAR(play(1.0, 145, 2, 57), sung, 2.0 / 57);
+    CHECK_NEAR(play(1.0, 0.25, 145, 3.2, 57).first, sung, 3.2 / 57);
 }
 
 // ---- Armoured glazing under fire --------------------------------------------------------

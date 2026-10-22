@@ -18,20 +18,20 @@ pressure). [docs/integration.md](docs/integration.md) shows the coupling.
 
 | Area | What is implemented | Evidence |
 |---|---|---|
-| Plate dynamics | The layup as one Kirchhoff plate: Bennison-Wölfel shear coupling through the interlayers, Navier modes of the simply supported pane advanced exactly (any step, 50 ns to ms), the logarithmic stress peak under a concentrated load added analytically within the modal resolution and limited to the flexural reach √(t·√(D/ρh)), and Zener's infinite-plate impedance 8√(Dρh) under the contact above the highest mode | `tests/test_foundations.cpp` (Navier deflections, frequencies, a 600 × 600-mode reference, energy conservation) |
+| Plate dynamics | The layup as one Kirchhoff plate: Bennison-Wölfel shear coupling through the interlayers, Navier modes of the simply supported pane advanced exactly (any step, 50 ns to ms), the logarithmic stress peak under a concentrated load added analytically within the modal resolution and limited to the flexural reach √(t·√(D/ρh)), and Zener's infinite-plate impedance 8√(Dρh) under the contact above the highest mode. Bent past its thickness the pane stretches in its plane (von Kármán, edges sliding in their gasket as in ASTM E1300's analysis): the lowest modes carry a quartic membrane energy, kicked in on a split step that keeps it, and the stretch adds to every stress, so a big pane's peak stress moves to its corners and a swinging pane stiffens | `tests/test_foundations.cpp` (Navier deflections, frequencies, a 600 × 600-mode reference, energy conservation; large deflection against a converged finite-difference von Kármán solution, `tools/vonkarman`, and E1300's deflection fit) |
 | Strength | Weibull flaw populations per face and edge (EN 16612 edge factor), the stress-corrosion rate law (a microsecond load meets glass about twice as strong as a minute-long one), residual-stress profiles: parabolic thermal tempering, linear ion exchange | `tests/test_foundations.cpp` |
 | Contact | Hertz with Thornton's elastic-plastic flattening and Flores' viscoelastic damping; cone indentation at the glass hardness for sharp tips (Lawn-Evans-Marshall median cracks); flat punches that crush (timber, brick); Wilbeck's Hugoniot and steady-flow pressures for birds; Hertzian cones by Auerbach's law, blocked by surface compression | `tests/test_foundations.cpp`, `tests/test_fracture.cpp` |
 | Cracks | Through-cracks grown tip by tip at up to the terminal crack speed (Freund), turned by the maximum hoop-stress kink criterion (Erdogan-Sih), forked by the fracture-mirror relation σ√r = A_b, shielded by neighbours, arrested (and restarted) by K_Ic, stopped at existing cracks; radial stars, concentric rings at the roots of the bent wedges, petals snapping round the impactor, Hertzian cones, crush zones | `tests/test_fracture.cpp` |
 | Tempered glass | Core tension forks running cracks into dice whose size comes from the energy balance (stored strain energy against new surface); the pane crazes at 1.5 km/s, then comes down procedurally: dice held only by friction with their neighbours and the frame let go from the hole up, in slabs that burst into dice on the floor, leaving a fringe in the frame. Fragment counts fall in the ECE R43 window | `tests/test_fracture.cpp` |
 | Laminates | Broken plies hand the load to the interlayer: an axisymmetric membrane with 1/r tension that tears at its rim; post-breakage bulge; plies on the compression side keep carrying load across closed cracks | `tests/test_fracture.cpp` (ECE R43 2.26 kg ball, road stone, window punch, head from inside) |
 | Ballistics | A crushed cone through each glass ply at 68°, plug momentum, soft noses mushrooming (Taylor), interlayer tearing and a polymer backing; comminution energy fitted to UL 752 classes. Oblique rounds meet each layer at its slant thickness and glance off near grazing; a round into an earlier crater only has to push the rubble aside. Every crushed disc is reported (white to the eye, and it takes away the view) | `tests/test_fracture.cpp` (Levels 1, 3, 8; multi-shot; obliquity, ricochet, craters; an 80-round barrage on an armoured windscreen) |
-| Tones | A steady note at the pane: sound as a uniform pressure, or a shaker at a point; phase kept as it is retuned, flaws checked 24 times a cycle against a cyclic-loading strength; the swing builds up by 1/(2ζ) on a mode | `tests/test_fracture.cpp` (build-up against Q, breaking on the note and not off it, frame-chop independence) |
+| Tones | A steady note at the pane: sound as a uniform pressure, or a shaker at a point; phase kept as it is retuned, or glided on engine time; flaws checked 24 times a cycle against a cyclic-loading strength; the swing builds up by 1/(2ζ) on a mode, until the pane's stretch detunes it from a held note: a glide upward follows the climbing peak | `tests/test_fracture.cpp` (build-up against Q, detuning and the glide on the bent peak, breaking by a glide and not by a held note, frame-chop independence) |
 | Pieces | Enclosed regions cut out by flood fill and traced into polygons, flown as rigid bodies (gravity, drag, floor friction), broken again by hard landings; pieces wedged in the frame or gripped by the gasket stay | `tests/test_fracture.cpp` |
 | Hosts | Pane mounts in the OpenRoad (ISO 8855) and Aviation (FRD) body frames, host-frame strikes, and a status back (visibility, barrier, open area, bulge) | `tests/test_bridge` cases in `tests/test_fracture.cpp` |
 | Any device | Five tiers (potato to ultra) change resolution, not physics: plate modes, crack grid, tip and piece budgets. Results do not depend on how the host chops its frames | `tests/test_fracture.cpp` (same outcome on every tier; frame-rate independence) |
 | Browser | WebAssembly build (wasi-sdk, no exceptions or RTTI, 310 KB) with a C ABI; Node smoke test | `web/`, `web/smoke_test.mjs` |
 
-66 test cases, on Linux (gcc, clang, sanitizers), macOS, Windows and WASM in CI.
+70 test cases, on Linux (gcc, clang, sanitizers), macOS, Windows and WASM in CI.
 What each scenario gives against its standard is in
 [docs/validation.md](docs/validation.md); how far each model goes, and its
 main gap, in [docs/physics.md](docs/physics.md).
@@ -41,12 +41,13 @@ main gap, in [docs/physics.md](docs/physics.md).
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-./build/tests/gls_tests                  # 66 test cases
+./build/tests/gls_tests                  # 70 test cases
 ./build/tests/gls_tests "UL 752"         # a filter
 ./build/glassdemo validate               # the scenario table
 ./build/glassdemo run windscreen steel_ball_2260 8.86 --svg out.svg   # one shot, its event log and an SVG of the cracks
 ./build/glassdemo run tempered_6 window_punch --tier 0                 # the same physics at potato resolution
 ./build/glassdemo list | bench
+./build/vonkarman 1.3333 0.22 32         # the large-deflection reference (finite differences), b/a = 4:3; a minute
 ```
 
 Options: `GLS_BUILD_TESTS`, `GLS_BUILD_TOOLS`, `GLS_WARNINGS_AS_ERRORS`.

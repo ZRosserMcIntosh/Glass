@@ -51,6 +51,60 @@ stiff, so the contact sees that dashpot, relaxing into the modes with the time
 constant 1/(2π f_max). Without it a steel ball on glass reaches about twice the
 real force.
 
+**Membrane action (large deflection).** Bent further than about its own
+thickness, a pane stretches in its plane, which stiffens it and changes its
+stresses: the analysis behind ASTM E1300's charts is nonlinear for this reason
+([`stretch.cpp`](../src/core/src/stretch.cpp)). The plate follows von Kármán:
+the mid-surface strain is
+
+```
+ε = (u,x + w,x²/2,  v,y + w,y²/2,  u,y + v,x + w,x w,y),   N = A ε,   A = Σ E h/(1−ν²) over the layup
+```
+
+and the edges, simply supported, are **free to slide in their plane** (N_n =
+N_nt = 0: glass in a gasket, as in the analysis behind E1300, whose
+deflection fit our reference reproduces to 1–2 %). The in-plane displacement
+(u, v) is in equilibrium with the bent shape at every instant (in-plane waves
+cross a pane in a fraction of a millisecond) and is a tensor Legendre series
+of degree 16. Only the lowest modes stretch the pane, a box of m ≤ m_s, n ≤ n_s
+with as many half-waves per metre each way (25 modes on the potato tier, 36
+on low to high, 49 on ultra): the corners, where a stretched pane is most
+stressed, need high orders both ways at once. Higher modes ride on the
+stretched pane; their swings are far below the thickness, and with them in
+the sum the stretch is noise. Minimising the membrane energy over (u, v)
+leaves, for w = Σ q_k ψ_k over the stretching modes, an energy quartic in q:
+
+```
+U = ½ pᵀ G p,   p_jk = q_j q_k  (j ≤ k)
+```
+
+G and the in-plane solution separate into one-dimensional integrals of
+Legendre polynomials and sines, and into the four symmetry classes of the
+pane about its centre lines, which do not couple; they cost 20–100 ms per
+shape of pane and are shared between panes. The membrane force ∂U/∂q comes as
+kicks between exact half-steps of the stretching modes (Strang's split, on a
+schedule of its own inside the plate, so the pane's step is unchanged): the
+kick is the gradient of an energy, so the split conserves it. Each interval
+resolves the stiffening, ω_nl Δ ≤ 0.5 (ω_nl from the membrane energy's own
+stiffness, 12U/q², and from the tension it puts on the highest stretching
+mode), and stays clear of that mode's half-period, ω Δ ≤ 2 (beyond it the
+split's resonance pumps energy: 36 % in 0.1 s of free swinging without it, 3 %
+with it). Below a quarter of the thickness of swing the stretch changes
+stiffness and stress by under 1 % and is skipped. The membrane strain is the
+same through the layup: each glass ply adds E/(1−ν²)·(ε_x + ν ε_y, ε_y + ν ε_x,
+(1−ν) γ/2) to its bending stress on both faces, on a lattice refreshed once per
+kick interval at most (three nodes per half-wave of the shortest stretching
+mode).
+
+What it gives (validation: [docs/validation.md](validation.md#large-deflection)):
+up to p a⁴/(E h⁴) ≈ 20 the pane is the linear plate; by 100 the peak stress
+has left the centre for the corners, 2–3 % of the side in along the diagonal,
+where membrane tension and the corner twist add; at 400 a square pane deflects a
+quarter as far as the linear plate says (4.8 against 18.5 thicknesses), and
+its peak stress, now at the corners, is about half the linear plate's at the
+centre. Swinging, the pane is a hardening spring: released from twice
+its thickness a 2 mm pane rings 20 % above its small-swing frequency.
+
 ## 2. Contact
 
 | Impactor | Model |
@@ -273,11 +327,23 @@ flaw has reached since it was last read, and `toneSwing()` the antinode swing
 from the plate's energy.
 
 On a mode the swing builds up to the static deflection × 1/(2ζ) over
-τ = 1/(ζω) (tested: 102 for ζ = 0.005). 2 mm picture glass, 0.30 × 0.25 m,
-rings at 135 Hz; at the glass, 130 dB never breaks it, 135 dB breaks it in
-0.8 s and 145 dB in 0.15 s. Those swings are 7 or more times the glass's
-thickness, past where the linear plate holds (see the gaps below), so they
-are lower bounds on what a real pane needs.
+τ = 1/(ζω) (tested: 102 for ζ = 0.005), as long as it stays below about half
+the thickness. Past that the pane stretches (section 1) and stiffens as it
+swings: its resonance climbs with the swing, so a note held at the
+small-swing fundamental falls off it, and the swing settles far below
+Q × static. `ToneLoad::sweep` glides the note (Hz/s, up to `sweepTo`) on engine
+time, so a glide upward can ride the climbing peak, the upper branch of a
+Duffing oscillator, until the swing outgrows it and drops off (the jump).
+
+2 mm picture glass, 0.30 × 0.25 m, rings at 135 Hz for small swings. At
+135 dB at the glass the linear plate would swing to 7 thicknesses on the note;
+held there, the pane swings 0.8 thickness. Gliding up from the note at a fifth
+of it per second the swing grows to 3.5 thicknesses at 206 Hz, then falls off
+(tested). At 145 dB a held note never breaks it (2 s; even at 155 dB the
+weakest flaw sees under a quarter of its strength), nor does one 20 % flat;
+gliding up a quarter of the note per second breaks it after 2.6 s, at 1.65
+times the small-swing note, about 220 Hz (tested, on every tier and however
+the host chops its frames). The same glide 20 dB quieter does not.
 
 ## Calibration constants
 
@@ -299,17 +365,28 @@ All in [`pane.cpp`](../src/core/src/pane.cpp) and
 | Crumbling time | 0.8 s × margin / 2 | edges keep shedding dice for a few seconds |
 | Crack wander, its length, tightest bend; ragged crush edge | 0.12 rad, 4 cm, 0.1 m; 14 % | estimated: the meander of radial cracks in photographs of broken annealed and heat-strengthened panes |
 | Blast hold threshold, gas reach | 1 kPa, 0.6 m | estimated: a kPa beats any piece's weight and frame grip per area; the gas jet acts over about half a window's width |
+| Stretching modes; in-plane Legendre degree | a box of 25 / 36 / 36 / 36 / 49 by tier; 16 | the converged von Kármán solution (docs/validation.md): degree 16 to 0.1 % of degree 20; the modes set the accuracy at high loads |
+| Stretch threshold | swings summing to 0.25 h | under 1 % change in stiffness and stress below it (the reference solution against the linear plate) |
+| Membrane kick interval | ω_nl Δ ≤ 0.5, ω_max Δ ≤ 2 | energy within 5 % over 0.1 s of free large swings at any pane step from 20 µs to 0.5 ms (test) |
 
 ## Main gaps
 
-- Panes are flat and simply supported; curved windscreens are flattened and
-  clamped or bonded edges are not modelled.
-- The plate is linear: a pane bent further than its own thickness does not
-  stretch and stiffen in its plane (membrane action). Very large swings, such
-  as a note held on resonance or a big pane under a blast, are therefore
-  generous. A Berger-type stretch was tried and set aside: with uniform
-  tension it relieved the stress so much that a 6 mm tempered window survived
-  a room blast that breaks it.
+- Panes are flat and simply supported, free to slide in their plane at the
+  edges; curved windscreens are flattened, and clamped, bonded or in-plane
+  restrained edges are not modelled.
+- Membrane action is carried by the lowest modes only. Deflection stays within
+  1 % of the converged solution to p a⁴/(E h⁴) = 500 on panes up to 4:3 (3 %
+  on 2:1), but the corner peak stress falls behind at high loads, the more so
+  on long panes: with 36 modes −4 % at 400 on a square, −5 % on a 4:3 pane,
+  −10 % at 200 on a 2:1 one (the ultra tier's 49 bring the square to −1 % and
+  the 2:1 pane to −3 %). Coarser tiers, with fewer bending modes, smooth it
+  further (−9 % at 400 on the low tier's square). The higher modes do not
+  feel the tension.
+  (A uniform Berger-type tension was tried first and set aside: it relieved
+  the stress so much that a 6 mm tempered window survived a room blast that
+  breaks it; the real stretch puts tension where the stress is highest.)
+- The layup stretches as one sheet (its plies do not slide in plane), and
+  its in-plane inertia is neglected.
 - The plate model does not soften as it cracks (except the wedge and layered
   load paths under the impactor); a heavily cracked laminate is stiffer than
   the real one.

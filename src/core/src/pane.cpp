@@ -11,11 +11,11 @@ namespace gls {
 Budget budgetForTier(int tier) {
     Budget b;
     switch (std::clamp(tier, 0, kTierCount - 1)) {
-        case 0: b = {"potato", 10, 0.006, 40000, 96, 20000, 600, 0.05, 0.016}; break;
-        case 1: b = {"low", 16, 0.004, 100000, 192, 50000, 1500, 0.035, 0.010}; break;
-        case 2: b = {"medium", 24, 0.003, 250000, 384, 120000, 3000, 0.025, 0.007}; break;
-        case 3: b = {"high", 32, 0.002, 500000, 768, 250000, 6000, 0.02, 0.005}; break;
-        default: b = {"ultra", 44, 0.0015, 1000000, 1536, 500000, 12000, 0.015, 0.003}; break;
+        case 0: b = {"potato", 10, 0.006, 40000, 96, 20000, 600, 0.05, 0.016, 25}; break;
+        case 1: b = {"low", 16, 0.004, 100000, 192, 50000, 1500, 0.035, 0.010, 36}; break;
+        case 2: b = {"medium", 24, 0.003, 250000, 384, 120000, 3000, 0.025, 0.007, 36}; break;
+        case 3: b = {"high", 32, 0.002, 500000, 768, 250000, 6000, 0.02, 0.005, 36}; break;
+        default: b = {"ultra", 44, 0.0015, 1000000, 1536, 500000, 12000, 0.015, 0.003, 49}; break;
     }
     return b;
 }
@@ -100,6 +100,15 @@ Pane::Pane(const GlazingDef& def, const Budget& budget, std::uint64_t seed) : de
         M = std::max(3, static_cast<int>(std::lround(budget_.modes * W / H)));
     }
     plate_.configure(W, H, lam_.D, lam_.massPerArea, lam_.poisson, def_.damping, M, N);
+    {
+        // In-plane stiffness of the layup and its Poisson ratio (the stiff plies dominate).
+        Real A = 0, An = 0;
+        for (const auto& l : lam_.layers) {
+            A += l.plateModulus * (l.z1 - l.z0);
+            An += l.poisson * l.plateModulus * (l.z1 - l.z0);
+        }
+        plate_.configureStretch(A, A > 0 ? An / A : lam_.poisson, lam_.thickness, budget_.stretchModes);
+    }
     plate_.addPressure(def_.pressure);
     plate_.settleStatic();
 
@@ -342,6 +351,11 @@ void Pane::step(Real dt) {
     }
     if (toned) {
         tonePhase_ = std::fmod(tonePhase_ + 2 * kPi * tone_.frequency * dt, 2 * kPi);
+        if (tone_.sweep != 0) {
+            tone_.frequency = std::max(0.1, tone_.frequency + tone_.sweep * dt);
+            if (tone_.sweepTo > 0)
+                tone_.frequency = tone_.sweep > 0 ? std::min(tone_.frequency, tone_.sweepTo) : std::max(tone_.frequency, tone_.sweepTo);
+        }
         toneAmp_ += (tone_.level - toneAmp_) * (1 - std::exp(-dt / std::max(tone_.ramp, 1e-6)));
         if (tone_.level <= 0 && toneAmp_ < 1e-3 * std::max(1.0, toneAmp_)) toneAmp_ = 0;
     }
@@ -863,6 +877,7 @@ void Pane::loadPointChecks(int k) {
     if (F <= 0) return;
     const Vec2 h = I.hit;
     const Curvature kc = plate_.curvature(h);
+    const PlaneStrain em = membraneAt(h);  // smooth: the lattice holds it
     const Real re = equivalentRadius(std::max(I.contactRadius, 1e-4), lam_.thickness);
     const Real nf = I.side * plate_.nearField(F, 0, re, time_ - I.loadOnset);
     const Real rf = rateFactor(time_ - I.loadOnset);
@@ -906,7 +921,7 @@ void Pane::loadPointChecks(int k) {
                              ? I.side * plate_.nearField(F, 0, equivalentRadius(depth, G.z1 - G.z0), time_ - I.loadOnset)
                              : nf;
         for (int f = 0; f < 2; ++f) {
-            const PlaneStress s = stressFromCurvature(static_cast<int>(g), f == 1, kc, nfg * scale, anyBroken);
+            const PlaneStress s = stressFromCurvature(static_cast<int>(g), f == 1, kc, nfg * scale, anyBroken, em);
             Real s1, s2, ang;
             s.principal(s1, s2, ang);
             if (s1 > 0) s1 = (s1 + G.surfaceCompression) * damage - G.surfaceCompression;
@@ -1179,7 +1194,8 @@ void Pane::ballisticEvents(int k) {
 
 // ---- Cracks --------------------------------------------------------------------------------
 
-PlaneStress Pane::stressFromCurvature(int g, bool back, const Curvature& k, Real nf, bool layered) const {
+PlaneStress Pane::stressFromCurvature(int g, bool back, const Curvature& k, Real nf, bool layered,
+                                      const PlaneStrain& e) const {
     const GlassPly& G = glass_[g];
     const LaminateLayer& L = lam_.layers[G.layer];
     const Real z = back ? L.z1 : L.z0;
@@ -1187,10 +1203,11 @@ PlaneStress Pane::stressFromCurvature(int g, bool back, const Curvature& k, Real
     const Real lever = layered ? z - L.mid() : lam_.lever(G.layer, z);
     const Real E = L.plateModulus, nu = L.poisson;
     const Real kxx = k.kxx + nf, kyy = k.kyy + nf;
+    // Bending, plus the stretch of the mid-surface (the same through the layup).
     PlaneStress s;
-    s.sxx = E * lever * (kxx + nu * kyy) - G.surfaceCompression;
-    s.syy = E * lever * (kyy + nu * kxx) - G.surfaceCompression;
-    s.sxy = E * lever * (1 - nu) * k.kxy;
+    s.sxx = E * (lever * (kxx + nu * kyy) + e.exx + nu * e.eyy) - G.surfaceCompression;
+    s.syy = E * (lever * (kyy + nu * kxx) + e.eyy + nu * e.exx) - G.surfaceCompression;
+    s.sxy = E * (1 - nu) * (lever * k.kxy + 0.5 * e.gxy);
     return s;
 }
 
@@ -1219,6 +1236,26 @@ Curvature Pane::curvatureAt(Vec2 p) {
         kNy_ = W >= H ? std::max(8, static_cast<int>(std::lround(nLong * H / W))) : nLong;
         kGrid_.resize(static_cast<std::size_t>(kNx_) * kNy_);
         plate_.sampleGrid(kNx_, kNy_, nullptr, nullptr, kGrid_.data());
+        // The stretch changes only as fast as the membrane force is updated:
+        // its lattice is refreshed at most once per membrane kick interval.
+        const bool live = plate_.stretching();
+        if (live != eLive_ || (live && (time_ - eGridTime_ >= plate_.stretchStep() || time_ < eGridTime_))) {
+            eLive_ = live;
+            eGridTime_ = time_;
+            eGridBound_ = 0;
+            if (live) {
+                // Its own lattice, three nodes per half-wave of the shortest
+                // stretching mode (the stretch is smoother than the bending).
+                eNx_ = std::min(kNx_, 6 * plate_.stretchModesX() + 1);
+                eNy_ = std::min(kNy_, 6 * plate_.stretchModesY() + 1);
+                eGrid_.resize(static_cast<std::size_t>(eNx_) * eNy_);
+                plate_.sampleGrid(eNx_, eNy_, nullptr, nullptr, nullptr, eGrid_.data());
+                // The stretch is smooth: its largest strain on the lattice, with a
+                // margin for between the nodes and for the time to the next refresh, bounds it.
+                for (const auto& e : eGrid_) eGridBound_ = std::max(eGridBound_, std::fabs(e.exx) + std::fabs(e.eyy) + std::fabs(e.gxy));
+                eGridBound_ *= 1.5;
+            }
+        }
         kGridTime_ = time_;
         kGridBound_ = plate_.curvatureBound();
     }
@@ -1235,8 +1272,24 @@ Curvature Pane::curvatureAt(Vec2 p) {
     return {mix(&Curvature::kxx), mix(&Curvature::kyy), mix(&Curvature::kxy)};
 }
 
+PlaneStrain Pane::membraneAt(Vec2 p) {
+    curvatureAt(p);  // refreshes both lattices when due
+    if (!eLive_) return {};
+    const Real fx = clampr(p.x / def_.width, 0, 1) * (eNx_ - 1), fy = clampr(p.y / def_.height, 0, 1) * (eNy_ - 1);
+    const int i = std::min(eNx_ - 2, static_cast<int>(fx)), j = std::min(eNy_ - 2, static_cast<int>(fy));
+    const Real u = fx - i, v = fy - j;
+    const PlaneStrain& a = eGrid_[static_cast<std::size_t>(j) * eNx_ + i];
+    const PlaneStrain& b = eGrid_[static_cast<std::size_t>(j) * eNx_ + i + 1];
+    const PlaneStrain& c = eGrid_[static_cast<std::size_t>(j + 1) * eNx_ + i];
+    const PlaneStrain& d = eGrid_[static_cast<std::size_t>(j + 1) * eNx_ + i + 1];
+    auto mix = [&](Real PlaneStrain::*f) {
+        return (1 - u) * (1 - v) * a.*f + u * (1 - v) * b.*f + (1 - u) * v * c.*f + u * v * d.*f;
+    };
+    return {mix(&PlaneStrain::exx), mix(&PlaneStrain::eyy), mix(&PlaneStrain::gxy)};
+}
+
 PlaneStress Pane::stress(int g, bool back, Vec2 p) const {
-    return stressFromCurvature(g, back, plate_.curvature(p.x, p.y), nearFieldAt(p));
+    return stressFromCurvature(g, back, plate_.curvature(p.x, p.y), nearFieldAt(p), false, plate_.membraneStrain(p));
 }
 
 Real Pane::nearFieldAt(Vec2 p) const {
@@ -1310,10 +1363,11 @@ void Pane::growCracks(Real dt) {
                 } else if (tip.evalAge >= every && evalBudget > 0) {
                     --evalBudget;
                     const Curvature kc = curvatureAt(tip.pos);
+                    const PlaneStrain em = membraneAt(tip.pos);
                     const Real nf = nearFieldAt(tip.pos);
-                    // Bending only: the residual profile acts through its core tension.
-                    PlaneStress f = stressFromCurvature(static_cast<int>(g), false, kc, nf);
-                    PlaneStress b = stressFromCurvature(static_cast<int>(g), true, kc, nf);
+                    // Bending and stretch: the residual profile acts through its core tension.
+                    PlaneStress f = stressFromCurvature(static_cast<int>(g), false, kc, nf, false, em);
+                    PlaneStress b = stressFromCurvature(static_cast<int>(g), true, kc, nf, false, em);
                     for (PlaneStress* s : {&f, &b}) {
                         s->sxx += G.surfaceCompression + ct;
                         s->syy += G.surfaceCompression + ct;
@@ -1498,7 +1552,8 @@ void Pane::probeChecks() {
                         if (!pr.fired[f]) G.probeMin[f] = std::min(G.probeMin[f], pr.strength[f]);
                 }
                 const Real lever = std::fabs(lam_.lever(G.layer, f ? L.z1 : L.z0));
-                const Real bound = L.plateModulus * lever * kGridBound_ * (3 - L.poisson) - G.surfaceCompression;
+                const Real bound = L.plateModulus * (lever * kGridBound_ * (3 - L.poisson) + (1 + L.poisson) * eGridBound_) -
+                                   G.surfaceCompression;
                 skip = skip && bound <= G.probeMin[f] * rf;
             }
             if (skip) continue;
@@ -1525,10 +1580,11 @@ void Pane::probeChecks() {
                     if (st.ply == static_cast<int>(g) && length(pr.p - st.centre) < st.reach) inStar = true;
                 if (inStar) continue;
                 const Curvature kp = curvatureAt(pr.p);
+                const PlaneStrain em = membraneAt(pr.p);
                 const Real nf = nearFieldAt(pr.p);
                 for (int f = 0; f < 2; ++f) {
                     if (pr.fired[f]) continue;
-                    const PlaneStress s = stressFromCurvature(static_cast<int>(g), f == 1, kp, nf);
+                    const PlaneStress s = stressFromCurvature(static_cast<int>(g), f == 1, kp, nf, false, em);
                     Real s1, s2, ang;
                     s.principal(s1, s2, ang);
                     if (s1 <= pr.strength[f] * rf) continue;
@@ -1593,8 +1649,9 @@ void Pane::tone(const ToneLoad& t) {
     tone_.level = std::max(t.level, 0.0);
     if (tone_.level > 0 && toneOnset_ < 0) toneOnset_ = time_;
     if (tone_.level > 0 && !was)
-        log(t.shaker ? fmt("shaker on at (%.2f, %.2f) m: %.1f Hz", t.at.x, t.at.y, tone_.frequency) + fmt(", %.2f N", tone_.level)
-                     : fmt("tone on: %.1f Hz, %.0f Pa at the glass", tone_.frequency, tone_.level));
+        log((t.shaker ? fmt("shaker on at (%.2f, %.2f) m: %.1f Hz", t.at.x, t.at.y, tone_.frequency) + fmt(", %.2f N", tone_.level)
+                      : fmt("tone on: %.1f Hz, %.0f Pa at the glass", tone_.frequency, tone_.level)) +
+            (t.sweep != 0 ? fmt(", gliding %.1f Hz/s", t.sweep) : std::string()));
     else if (tone_.level <= 0 && was) log("tone off");
 }
 
@@ -1618,10 +1675,11 @@ void Pane::toneMeterCheck() {
         if (G.fragmented) continue;
         for (const auto& pr : G.probes) {
             const Curvature k = curvatureAt(pr.p);
+            const PlaneStrain em = membraneAt(pr.p);
             for (int f = 0; f < 2; ++f) {
                 if (pr.fired[f]) continue;
                 Real s1, s2, ang;
-                stressFromCurvature(static_cast<int>(g), f == 1, k, 0).principal(s1, s2, ang);
+                stressFromCurvature(static_cast<int>(g), f == 1, k, 0, false, em).principal(s1, s2, ang);
                 const Real st = pr.strength[f] * rf, r = s1 / st;
                 if (r > meterRatio_) { meterRatio_ = r; meterStress_ = s1; meterStrength_ = st; }
             }
@@ -2132,7 +2190,8 @@ void Pane::sampleFields(int g, int nx, int ny, std::vector<float>& w, std::vecto
     const std::size_t n = static_cast<std::size_t>(nx) * ny;
     std::vector<Real> ww(n);
     std::vector<Curvature> kk(n);
-    plate_.sampleGrid(nx, ny, ww.data(), nullptr, kk.data());
+    std::vector<PlaneStrain> ee(n);
+    plate_.sampleGrid(nx, ny, ww.data(), nullptr, kk.data(), ee.data());
     w.resize(n);
     front.resize(n);
     back.resize(n);
@@ -2156,9 +2215,9 @@ void Pane::sampleFields(int g, int nx, int ny, std::vector<float>& w, std::vecto
             if (g >= 0 && g < static_cast<int>(glass_.size())) {
                 const Real nf = nearFieldAt(p);
                 Real s1, s2, a;
-                stressFromCurvature(g, false, kk[o], nf).principal(s1, s2, a);
+                stressFromCurvature(g, false, kk[o], nf, false, ee[o]).principal(s1, s2, a);
                 front[o] = static_cast<float>(s1);
-                stressFromCurvature(g, true, kk[o], nf).principal(s1, s2, a);
+                stressFromCurvature(g, true, kk[o], nf, false, ee[o]).principal(s1, s2, a);
                 back[o] = static_cast<float>(s1);
             }
         }

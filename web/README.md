@@ -37,6 +37,11 @@ until the next call.
 | `gls_select(slot)` | picks which of 32 pane slots every other call works on (a building's windows); each keeps its own pane and clock |
 | `gls_free_pane()` | drops the selected slot's pane |
 | `gls_blast(arrival, peak, duration, decay, gasPeak, gasRise, gasTau)` | a blast wave on the pane: Friedlander shock (reflected peak Pa, positive phase s) arriving at engine time `arrival`, plus a confined charge's gas pressure rising and venting; + pushes toward the back face |
+| `gls_tone(frequency, level, ramp, shaker, x, y)` | a steady note at the pane: peak level at the glass (Pa of sound, or N from a shaker at x, y), following a new level with time constant `ramp`; retuning keeps the phase; level 0 fades it out |
+| `gls_tone_glide(rate, to)` | glides the note at `rate` Hz/s on engine time until it reaches `to` Hz (0: no stop): a pane bent past its thickness stiffens, so its resonance climbs with the swing and a fixed note falls off it |
+| `gls_tone_frequency()`, `gls_tone_level()`, `gls_tone_swing()` | the note's frequency and level now, and the antinode swing (m) |
+| `gls_stress_strength()` | 3 doubles: the highest share of its own strength any flaw has seen since the last call, that flaw's tension and its strength (Pa) |
+| `gls_mode_hz(m, n)` | natural frequency of plate mode (m, n), small swings |
 
 Positions are in the pane frame: x along the width, y up from the bottom edge,
 z into the glass from the struck face, metres.

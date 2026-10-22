@@ -36,6 +36,7 @@ struct Budget {
     int maxFragments = 6000;
     Real probeSpacing = 0.02;       // m, flaw probe lattice
     Real minDiceSpacing = 0.005;    // m, coarsest tempered fragment the tier draws
+    int stretchModes = 36;          // lowest modes that stretch the pane in its plane (membrane action)
 };
 Budget budgetForTier(int tier);  // 0 potato, 1 low, 2 medium, 3 high, 4 ultra
 inline constexpr int kTierCount = 5;
@@ -138,11 +139,15 @@ struct BlastLoad {
 // wave square on: a uniform pressure on the struck face, already doubled by
 // its reflection off the glass. A shaker instead pushes at one point, as on a
 // Chladni plate. Changing the frequency or the level keeps the phase running,
-// so a slider can sweep it.
+// so a slider can sweep it; `sweep` glides the note on engine time instead
+// (a bent pane stiffens, so its resonance climbs as it swings: a fixed note
+// falls off the peak, a note gliding up can follow it).
 struct ToneLoad {
     Real frequency = 100;  // Hz
     Real level = 0;        // peak at the glass: Pa (sound) or N (shaker)
     Real ramp = 0.05;      // s, the time constant the level follows its target with
+    Real sweep = 0;        // Hz/s the frequency glides at while the tone plays (+ up)
+    Real sweepTo = 0;      // Hz where the glide stops (0: it does not)
     bool shaker = false;
     Vec2 at;               // the shaker's point on the pane, m
 };
@@ -244,7 +249,7 @@ public:
     void blast(const BlastLoad& b);
     // Starts, retunes or stops (level 0) a steady tone.
     void tone(const ToneLoad& t);
-    const ToneLoad& toneTarget() const { return tone_; }
+    const ToneLoad& toneTarget() const { return tone_; }  // its frequency is the one now, as it glides
     Real toneLevel() const { return toneAmp_; }  // the level now, as it follows the target
     bool toneActive() const { return tone_.level > 0 || toneAmp_ > 1e-9; }
     // How near the glass is to breaking under a tone: the highest share of
@@ -287,11 +292,14 @@ private:
     bool breakUnderBlast(int g, Real p, std::size_t from);
     Real rateFactor(Real loadTime) const;
     Real nearFieldAt(Vec2 p) const;
-    PlaneStress stressFromCurvature(int g, bool back, const Curvature& k, Real extraIso, bool layered = false) const;
+    PlaneStress stressFromCurvature(int g, bool back, const Curvature& k, Real extraIso, bool layered = false,
+                                    const PlaneStrain& membrane = {}) const;
     // Curvature at p from a lattice refreshed every few microseconds (crack
     // tips sample it; the plate's modes are band-limited, so bilinear
     // interpolation on a lattice finer than the shortest mode loses nothing).
     Curvature curvatureAt(Vec2 p);
+    // Mid-surface stretch at p, from a lattice refreshed with the curvature's.
+    PlaneStrain membraneAt(Vec2 p);
     void log(const std::string& s);
     bool monolithic() const { return monolithic_; }
 
@@ -313,6 +321,11 @@ private:
     std::vector<MembranePly> membranePlies_;
     Real fragTime_ = 0;  // pieces step at their own fixed rate
     std::vector<Curvature> kGrid_;
+    std::vector<PlaneStrain> eGrid_;
+    bool eLive_ = false;   // the pane was stretching when the lattices were last refreshed
+    Real eGridBound_ = 0;  // no stretch strain component sum exceeds this
+    Real eGridTime_ = -1;
+    int eNx_ = 0, eNy_ = 0;
     int kNx_ = 0, kNy_ = 0;
     Real kGridTime_ = -1, kGridBound_ = 0, kCheckedAt_ = -1;
     bool kDue_ = false;
