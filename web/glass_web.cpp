@@ -18,6 +18,7 @@
 
 #include "gls/library.hpp"
 #include "gls/pane.hpp"
+#include "gls/rupert.hpp"
 
 #define GLS_EXPORT extern "C" __attribute__((visibility("default")))
 
@@ -40,6 +41,9 @@ struct Sim {
     std::vector<float> cracks, frags, poses, field;
     std::vector<float> sprays, crushes;
     std::vector<std::int32_t> labels;
+    std::unique_ptr<RupertDrop> drop;  // a Prince Rupert's drop, apart from the panes
+    std::vector<double> dropState;
+    std::vector<float> dropFrags;
 };
 
 Sim* g = nullptr;
@@ -442,6 +446,93 @@ GLS_EXPORT double gls_mode_hz(int m, int n) {
     if (!S.pane || m < 1 || n < 1 || m > S.pane->plate().modesX() || n > S.pane->plate().modesY()) return 0;
     return S.pane->plate().modeHz(m, n);
 }
+
+// ---- Prince Rupert's drop ----
+// A new drop: head radius, length, tip radius (mm), surface compression and
+// core tension (MPa), seed. Glass is soda-lime.
+GLS_EXPORT int gls_drop_new(double headMm, double lengthMm, double tipMm, double compMPa, double coreMPa, double seed) {
+    Sim& S = sim();
+    const Material* m = S.lib.material("soda_lime_float");
+    if (!m) return 0;
+    DropShape d;
+    d.headRadius = headMm * 1e-3;
+    d.length = lengthMm * 1e-3;
+    d.tipRadius = tipMm * 1e-3;
+    d.surfaceCompression = compMPa * 1e6;
+    d.coreTension = coreMPa * 1e6;
+    S.drop = std::make_unique<RupertDrop>(d, *m, static_cast<std::uint64_t>(seed));
+    return 1;
+}
+
+// Snap the tail x m from the head.
+GLS_EXPORT int gls_drop_snip(double x) {
+    Sim& S = sim();
+    if (!S.drop) return 0;
+    S.drop->snip(x);
+    putText(S.drop->outcome());
+    return 1;
+}
+
+// Library impactor `index` hits the head at `speed` (m/s; <= 0: its own).
+// Returns 1 if the drop broke; the outcome goes to the text buffer.
+GLS_EXPORT int gls_drop_strike(int index, double speed) {
+    Sim& S = sim();
+    if (!S.drop || index < 0 || index >= static_cast<int>(S.lib.impactors.size())) return 0;
+    const ImpactorDef& d = S.lib.impactors[index];
+    DropStrike st;
+    st.mass = d.mass;
+    st.radius = d.radius;
+    st.speed = speed > 0 ? speed : d.speed;
+    st.density = d.density;
+    st.yield = d.yield;
+    st.youngs = d.youngs;
+    st.poisson = d.poisson;
+    st.rigid = d.kind != ImpactorKind::Projectile;
+    const bool broke = S.drop->strike(st);
+    putText(S.drop->outcome());
+    return broke ? 1 : 0;
+}
+
+GLS_EXPORT void gls_drop_advance(double t) {
+    if (sim().drop) sim().drop->advance(t);
+}
+
+// [time, broken from, broken to (m along the axis), broken, snipped at,
+//  front speed, fragments, contact pressure, drive, needed, by force,
+//  skin depth, skin mean compression, fragment size, length, started at]
+GLS_EXPORT double* gls_drop_state() {
+    Sim& S = sim();
+    S.dropState.assign(16, 0);
+    if (!S.drop) return S.dropState.data();
+    const RupertDrop& d = *S.drop;
+    const double v[16] = {d.time(), d.brokenFrom(), d.brokenTo(), d.broken() ? 1.0 : 0.0, d.snippedAt(), d.frontSpeed(),
+                          static_cast<double>(d.fragments().size()), d.contactPressure(), d.drive(), d.needed(),
+                          d.byForce() ? 1.0 : 0.0, d.skinDepth(), d.skinCompression(), d.fragmentSize(),
+                          d.length(), d.startedAt()};
+    std::copy(v, v + 16, S.dropState.begin());
+    return S.dropState.data();
+}
+
+// Fragments from index `from`: [count, then 9 float32 each: born, x, y, z,
+// vx, vy, vz, size, lead (0/1)], drop frame (x along the axis, y up).
+GLS_EXPORT float* gls_drop_fragments(int from) {
+    Sim& S = sim();
+    S.dropFrags.assign(1, 0);
+    if (!S.drop) return S.dropFrags.data();
+    const auto& fr = S.drop->fragments();
+    for (std::size_t i = static_cast<std::size_t>(std::max(0, from)); i < fr.size(); ++i) {
+        const DropFragment& f = fr[i];
+        const float v[9] = {static_cast<float>(f.born), static_cast<float>(f.pos.x), static_cast<float>(f.pos.y),
+                            static_cast<float>(f.pos.z), static_cast<float>(f.vel.x), static_cast<float>(f.vel.y),
+                            static_cast<float>(f.vel.z), static_cast<float>(f.size), f.lead ? 1.f : 0.f};
+        S.dropFrags.insert(S.dropFrags.end(), v, v + 9);
+    }
+    S.dropFrags[0] = static_cast<float>((S.dropFrags.size() - 1) / 9);
+    return S.dropFrags.data();
+}
+
+GLS_EXPORT double gls_drop_radius(double x) { return sim().drop ? sim().drop->radius(x) : 0; }
+GLS_EXPORT double gls_drop_residual(double u) { return sim().drop ? sim().drop->residual(u) : 0; }
 
 // The laminate sheet fragment i is bonded into (a clump index), or -1.
 GLS_EXPORT int gls_fragment_sheet(int i) {

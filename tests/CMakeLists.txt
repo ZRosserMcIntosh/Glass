@@ -2,6 +2,7 @@ set(GLS_TEST_SOURCES
   test_main.cpp
   test_foundations.cpp
   test_fracture.cpp
+  test_rupert.cpp
 )
 add_executable(gls_tests ${GLS_TEST_SOURCES})
 target_link_libraries(gls_tests PRIVATE gls_core)

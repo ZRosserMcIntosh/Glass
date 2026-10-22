@@ -284,6 +284,50 @@
       }
     },
     {
+      "id": "lead_38",
+      "name": ".38 Special, lead",
+      "category": "ballistic",
+      "description": "158 gr lead round nose: a soft, slow revolver bullet, the one fired at Prince Rupert's drops on camera.",
+      "kind": "projectile",
+      "mass_g": 10.2,
+      "radius_mm": 4.5,
+      "length_mm": 17,
+      "youngs_GPa": 16,
+      "poisson": 0.44,
+      "density_kgm3": 11300,
+      "yield_MPa": 40,
+      "speed_ms": 230,
+      "min_speed_ms": 100,
+      "max_speed_ms": 400,
+      "provenance": {
+        "mass_g": "published: .38 Special 158 gr (10.2 g) lead round nose, 0.357 in",
+        "speed_ms": "published: about 755 ft/s from a 4 in barrel (SAAMI-pressure loads)",
+        "yield_MPa": "estimated: soft lead alloy at impact strain rates"
+      }
+    },
+    {
+      "id": "lead_22",
+      "name": ".22 LR, lead",
+      "category": "ballistic",
+      "description": "40 gr lead round nose at standard velocity: the smallest rimfire round.",
+      "kind": "projectile",
+      "mass_g": 2.6,
+      "radius_mm": 2.83,
+      "length_mm": 11,
+      "youngs_GPa": 16,
+      "poisson": 0.44,
+      "density_kgm3": 11300,
+      "yield_MPa": 40,
+      "speed_ms": 330,
+      "min_speed_ms": 100,
+      "max_speed_ms": 500,
+      "provenance": {
+        "mass_g": "published: .22 LR 40 gr (2.6 g) lead round nose, 0.223 in",
+        "speed_ms": "published: standard velocity, about 1,080 ft/s from a rifle",
+        "yield_MPa": "estimated: soft lead alloy at impact strain rates"
+      }
+    },
+    {
       "id": "pistol_9mm",
       "name": "9 mm FMJ",
       "category": "ballistic",

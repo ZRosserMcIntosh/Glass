@@ -279,6 +279,27 @@ rings at 135 Hz; at the glass, 130 dB never breaks it, 135 dB breaks it in
 thickness, past where the linear plate holds (see the gaps below), so they
 are lower bounds on what a real pane needs.
 
+## 9. Prince Rupert's drop
+
+`RupertDrop` (`gls/rupert.hpp`, `gls_drop_*` in the browser) is a body of
+revolution, not a pane: a spherical head thinning into a long tail, with the
+frozen axial stress σ(u) = σ_t − (σ_t + σ_c) u^k over the share of the radius
+u, and k = 2σ_c/σ_t, so that every section carries no net force. Snapping the
+tail starts a front at the glass's terminal crack speed that runs to the head;
+every fragment it makes (size from the tempered-dice energy balance on the
+core tension, speed from 5 % of the strain energy where it was, estimated) is
+decided when it starts, with the time the front reaches it, so stepping only
+moves the clock. A strike on the head breaks it only if a crack gets through
+the compressed skin, of depth d:
+
+- a hard object, as a Hertz contact, by Roesler's cone crack closed by the
+  skin's mean compression: χF/d^1.5 > K_Ic + 1.12 σ̄_c √(πd) (about 20 kN for
+  a 5 mm head, against the order of 15 kN that compression tests find);
+- a soft bullet that flows, at the stagnation pressure Y + ½ρv² (Tate), by the
+  pull (1 − 2ν)/2 p beside its face (Love) against the surface compression:
+  1.12(σ − σ_c)√(πd) > K_Ic (a .38 lead bullet splashes, a 7.62 rifle round
+  bursts the drop).
+
 ## Calibration constants
 
 All in [`pane.cpp`](../src/core/src/pane.cpp) and

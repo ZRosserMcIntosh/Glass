@@ -33,6 +33,7 @@ add_library(gls_core
   src/core/src/collapse.cpp
   src/core/src/pane.cpp
   src/core/src/bridge.cpp
+  src/core/src/rupert.cpp
 )
 add_library(gls::core ALIAS gls_core)
 target_include_directories(gls_core PUBLIC src/core/include)
