@@ -404,6 +404,45 @@ GLS_EXPORT double* gls_impactors() {
     return S.imps.data();
 }
 
+// A steady tone at the pane: frequency (Hz), level (peak at the glass: Pa for
+// sound, N for a shaker), ramp time constant (s); shaker != 0 pushes at (x, y)
+// instead of loading the whole face. Level 0 fades it out. Retuning keeps the phase.
+GLS_EXPORT int gls_tone(double frequency, double level, double ramp, int shaker, double x, double y) {
+    Sim& S = sim();
+    if (!S.pane) return 0;
+    ToneLoad t;
+    t.frequency = frequency;
+    t.level = level;
+    t.ramp = ramp;
+    t.shaker = shaker != 0;
+    t.at = {x, y};
+    S.pane->tone(t);
+    return 1;
+}
+
+// The tone's level now (it follows the target), or 0.
+GLS_EXPORT double gls_tone_level() { return sim().pane ? sim().pane->toneLevel() : 0; }
+
+// How near a tone has brought the glass to breaking since the last call:
+// [share of its strength, that flaw's tension (Pa), its strength (Pa)].
+GLS_EXPORT double* gls_stress_strength() {
+    Sim& S = sim();
+    S.report.assign(3, 0);
+    if (!S.pane) return S.report.data();
+    S.report[0] = S.pane->toneMeter(S.report[1], S.report[2]);
+    return S.report.data();
+}
+
+// How far the pane swings under the tone now, m.
+GLS_EXPORT double gls_tone_swing() { return sim().pane ? sim().pane->toneSwing() : 0; }
+
+// Natural frequency (Hz) of plate mode (m, n), 1-based.
+GLS_EXPORT double gls_mode_hz(int m, int n) {
+    Sim& S = sim();
+    if (!S.pane || m < 1 || n < 1 || m > S.pane->plate().modesX() || n > S.pane->plate().modesY()) return 0;
+    return S.pane->plate().modeHz(m, n);
+}
+
 // The laminate sheet fragment i is bonded into (a clump index), or -1.
 GLS_EXPORT int gls_fragment_sheet(int i) {
     Sim& S = sim();

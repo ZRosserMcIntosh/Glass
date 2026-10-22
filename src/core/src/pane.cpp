@@ -52,6 +52,14 @@ constexpr Real kLaminateWedgeSupport = 0.15; // the same for wedges bonded to an
 constexpr Real kMembraneRatio = 0.3;
 constexpr Real kEdgeBond = 1e6;            // Pa: a sealant bond at break over the bite (structural silicone ~0.7-1 MPa)
 constexpr Real kWrapPiece = 0.06;          // m: bonded glass folded round an impactor breaks to pieces this size
+constexpr Real kShakerRadius = 0.01;        // m, the foot of a shaker (Chladni drive)
+constexpr Real kToneStepsPerCycle = 32;    // steps per cycle of a tone (the force is held over each)
+constexpr Real kToneProbesPerCycle = 24;   // flaw checks per cycle (catches the peak to within 1 %)
+// Under a cyclic load a flaw grows only near the peaks of tension: with the
+// stress-corrosion exponent n ~ 16, the integral of max(0, sin)^n over a cycle
+// is about 0.1 of the cycle. That share of the time the tone has played is the
+// equivalent time at its peak stress for the loading-rate factor.
+constexpr Real kCyclicShare = 0.1;
 constexpr Real kSheetPiece = 0.15;         // m: and elsewhere, cracked into pieces no bigger than this, still bonded
 constexpr Real kWrapCone = 1.0;            // rad: a sheet wrapped whole folds round the nose this far, then trails as a cone
 constexpr Real kWrapTight = 2.2;           // rad: a torn-out disc wraps round the impactor at most this far
@@ -210,6 +218,7 @@ int Pane::fireOne(const ImpactorDef& d, Vec2 at, Real speed, Real yaw, Real pitc
 // ---- Time stepping --------------------------------------------------------------------
 
 bool Pane::quiet() const {
+    if (toneActive()) return false;
     for (const auto& b : blasts_)
         if (time_ < b.end()) return false;
     for (const auto& I : imp_)
@@ -258,6 +267,7 @@ Real Pane::chooseStep() const {
         else if (time_ < b.arrival + 2 * b.duration) dt = std::min(dt, std::max(0.2e-6, b.duration / 50));
         else if (time_ < b.end()) dt = std::min(dt, 50e-6);
     }
+    if (toneActive()) dt = std::min(dt, 1 / (kToneStepsPerCycle * std::max(tone_.frequency, 1.0)));
     if (time_ - lastDynamic_ < kDynamicWindow) dt = std::min(dt, 10e-6);
     return dt;
 }
@@ -291,6 +301,13 @@ void Pane::step(Real dt) {
     plate_.clearForces();
     const Real pb = blastPressure(time_);
     plate_.addPressure(def_.pressure + pb);
+    const bool toned = toneActive();
+    if (toned) {
+        const Real F = toneValue(dt);
+        if (tone_.shaker) plate_.addPatch(tone_.at.x, tone_.at.y, kShakerRadius, F);
+        else plate_.addPressure(F);
+        lastLoaded_ = time_;
+    }
     if (std::fabs(pb) > kBlastActive) {
         if (blastOnset_ < 0) {
             blastOnset_ = time_;
@@ -316,9 +333,17 @@ void Pane::step(Real dt) {
     for (const auto& I : imp_)
         if (I.phase == ImpactorPhase::Contact || I.phase == ImpactorPhase::Ballistic)
             probeEvery = std::min(probeEvery, std::max(5e-6, 5 * I.contactStep));
-    if (time_ - lastDynamic_ < kDynamicWindow && time_ - lastProbe_ >= probeEvery) {
+    const bool dynamic = time_ - lastDynamic_ < kDynamicWindow;
+    if (toned && !dynamic) probeEvery = 1 / (kToneProbesPerCycle * std::max(tone_.frequency, 1.0));
+    if ((dynamic || toned) && time_ - lastProbe_ >= probeEvery) {
         probeChecks();
+        if (toned) toneMeterCheck();
         lastProbe_ = time_;
+    }
+    if (toned) {
+        tonePhase_ = std::fmod(tonePhase_ + 2 * kPi * tone_.frequency * dt, 2 * kPi);
+        toneAmp_ += (tone_.level - toneAmp_) * (1 - std::exp(-dt / std::max(tone_.ramp, 1e-6)));
+        if (tone_.level <= 0 && toneAmp_ < 1e-3 * std::max(1.0, toneAmp_)) toneAmp_ = 0;
     }
     time_ += dt;
     // Arrested cracks stay arrested once the load is long gone.
@@ -1450,8 +1475,8 @@ void Pane::probeChecks() {
     for (const auto& I : imp_)
         if (I.touched) onset = std::max(onset, I.loadOnset);
     if (blastOnset_ >= 0) onset = std::max(onset, blastOnset_);
-    if (onset < 0) return;
-    const Real rf = rateFactor(time_ - onset);
+    if (onset < 0 && toneOnset_ < 0) return;
+    const Real rf = strengthFactor();
     // With nothing pressing on the pane there is no near field, and no probe
     // can see more than the plate's curvature bound: skip the faces whose
     // weakest unfired probe that cannot reach. s1 <= E |lever| K (3 - nu) - SC.
@@ -1549,6 +1574,72 @@ Real BlastLoad::pressure(Real t) const {
 }
 
 Real BlastLoad::end() const { return arrival + std::max(4 * duration, gasPeak > 0 ? 6 * gasTau : 0.0); }
+
+// The loading-rate factor on strength for what loads the pane now: the
+// latest impact or blast; else a tone, by its equivalent time at peak.
+Real Pane::strengthFactor() const {
+    Real onset = -1;
+    for (const auto& I : imp_)
+        if (I.touched) onset = std::max(onset, I.loadOnset);
+    if (blastOnset_ >= 0) onset = std::max(onset, blastOnset_);
+    if (onset >= 0) return rateFactor(time_ - onset);
+    return toneOnset_ >= 0 ? rateFactor(kCyclicShare * (time_ - toneOnset_)) : rateFactor(60.0);
+}
+
+void Pane::tone(const ToneLoad& t) {
+    const bool was = tone_.level > 0;
+    tone_ = t;
+    tone_.frequency = std::max(t.frequency, 0.1);
+    tone_.level = std::max(t.level, 0.0);
+    if (tone_.level > 0 && toneOnset_ < 0) toneOnset_ = time_;
+    if (tone_.level > 0 && !was)
+        log(t.shaker ? fmt("shaker on at (%.2f, %.2f) m: %.1f Hz", t.at.x, t.at.y, tone_.frequency) + fmt(", %.2f N", tone_.level)
+                     : fmt("tone on: %.1f Hz, %.0f Pa at the glass", tone_.frequency, tone_.level));
+    else if (tone_.level <= 0 && was) log("tone off");
+}
+
+Real Pane::toneValue(Real dt) const {
+    // Held over the step at its value in the middle of it.
+    return toneAmp_ * std::sin(tonePhase_ + kPi * tone_.frequency * dt);
+}
+
+Real Pane::toneSwing() const {
+    // One mode swinging at amplitude A holds E = (rho h a b / 4) w^2 A^2 / 2.
+    const Real w = 2 * kPi * std::max(tone_.frequency, plate_.fundamentalHz());
+    const Real modalMass = lam_.massPerArea * def_.width * def_.height / 4;
+    return std::sqrt(2 * plate_.energy() / (modalMass * w * w));
+}
+
+// Every flaw against its own strength at this loading rate.
+void Pane::toneMeterCheck() {
+    const Real rf = strengthFactor();
+    for (std::size_t g = 0; g < glass_.size(); ++g) {
+        const GlassPly& G = glass_[g];
+        if (G.fragmented) continue;
+        for (const auto& pr : G.probes) {
+            const Curvature k = curvatureAt(pr.p);
+            for (int f = 0; f < 2; ++f) {
+                if (pr.fired[f]) continue;
+                Real s1, s2, ang;
+                stressFromCurvature(static_cast<int>(g), f == 1, k, 0).principal(s1, s2, ang);
+                const Real st = pr.strength[f] * rf, r = s1 / st;
+                if (r > meterRatio_) { meterRatio_ = r; meterStress_ = s1; meterStrength_ = st; }
+            }
+        }
+    }
+}
+
+Real Pane::toneMeter(Real& stress, Real& strength) {
+    if (!toneActive()) {
+        meterRatio_ = 0;
+        toneMeterCheck();
+    }
+    const Real r = std::max(0.0, meterRatio_);
+    stress = meterStress_;
+    strength = meterStrength_;
+    meterRatio_ = -1e30;
+    return r;
+}
 
 void Pane::blast(const BlastLoad& b) {
     blasts_.push_back(b);

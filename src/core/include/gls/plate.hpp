@@ -102,6 +102,7 @@ public:
     Real curvatureBound() const;
     Real maxFrequencyHz() const;
     Real fundamentalHz() const;
+    Real modeHz(int m, int n) const { return omega_[static_cast<std::size_t>(m - 1) * N_ + (n - 1)] / (2 * kPi); }
     int modesX() const { return M_; }
     int modesY() const { return N_; }
     Real width() const { return a_; }

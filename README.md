@@ -25,12 +25,13 @@ pressure). [docs/integration.md](docs/integration.md) shows the coupling.
 | Tempered glass | Core tension forks running cracks into dice whose size comes from the energy balance (stored strain energy against new surface); the pane crazes at 1.5 km/s, then comes down procedurally: dice held only by friction with their neighbours and the frame let go from the hole up, in slabs that burst into dice on the floor, leaving a fringe in the frame. Fragment counts fall in the ECE R43 window | `tests/test_fracture.cpp` |
 | Laminates | Broken plies hand the load to the interlayer: an axisymmetric membrane with 1/r tension that tears at its rim; post-breakage bulge; plies on the compression side keep carrying load across closed cracks | `tests/test_fracture.cpp` (ECE R43 2.26 kg ball, road stone, window punch, head from inside) |
 | Ballistics | A crushed cone through each glass ply at 68°, plug momentum, soft noses mushrooming (Taylor), interlayer tearing and a polymer backing; comminution energy fitted to UL 752 classes. Oblique rounds meet each layer at its slant thickness and glance off near grazing; a round into an earlier crater only has to push the rubble aside. Every crushed disc is reported (white to the eye, and it takes away the view) | `tests/test_fracture.cpp` (Levels 1, 3, 8; multi-shot; obliquity, ricochet, craters; an 80-round barrage on an armoured windscreen) |
+| Tones | A steady note at the pane: sound as a uniform pressure, or a shaker at a point; phase kept as it is retuned, flaws checked 24 times a cycle against a cyclic-loading strength; the swing builds up by 1/(2ζ) on a mode | `tests/test_fracture.cpp` (build-up against Q, breaking on the note and not off it, frame-chop independence) |
 | Pieces | Enclosed regions cut out by flood fill and traced into polygons, flown as rigid bodies (gravity, drag, floor friction), broken again by hard landings; pieces wedged in the frame or gripped by the gasket stay | `tests/test_fracture.cpp` |
 | Hosts | Pane mounts in the OpenRoad (ISO 8855) and Aviation (FRD) body frames, host-frame strikes, and a status back (visibility, barrier, open area, bulge) | `tests/test_bridge` cases in `tests/test_fracture.cpp` |
 | Any device | Five tiers (potato to ultra) change resolution, not physics: plate modes, crack grid, tip and piece budgets. Results do not depend on how the host chops its frames | `tests/test_fracture.cpp` (same outcome on every tier; frame-rate independence) |
 | Browser | WebAssembly build (wasi-sdk, no exceptions or RTTI, 310 KB) with a C ABI; Node smoke test | `web/`, `web/smoke_test.mjs` |
 
-53 test cases, on Linux (gcc, clang, sanitizers), macOS, Windows and WASM in CI.
+66 test cases, on Linux (gcc, clang, sanitizers), macOS, Windows and WASM in CI.
 What each scenario gives against its standard is in
 [docs/validation.md](docs/validation.md); how far each model goes, and its
 main gap, in [docs/physics.md](docs/physics.md).
@@ -40,7 +41,7 @@ main gap, in [docs/physics.md](docs/physics.md).
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-./build/tests/gls_tests                  # 48 test cases
+./build/tests/gls_tests                  # 66 test cases
 ./build/tests/gls_tests "UL 752"         # a filter
 ./build/glassdemo validate               # the scenario table
 ./build/glassdemo run windscreen steel_ball_2260 8.86 --svg out.svg   # one shot, its event log and an SVG of the cracks

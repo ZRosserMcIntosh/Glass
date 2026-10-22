@@ -484,6 +484,73 @@ TEST_CASE("cannonball: a thin interlayer tears round the ball; a bullet still pl
     CHECK(b.report.embedded);
 }
 
+// ---- Resonance ----------------------------------------------------------------------------
+
+namespace {
+// Largest |deflection| at the pane centre over the last `window` seconds of a tone.
+double toneSwing(Pane& p, const ToneLoad& t, double run, double window) {
+    p.tone(t);
+    double w = 0;
+    const double dt = 1 / (40 * t.frequency);
+    for (double s = dt; s <= run + 1e-12; s += dt) {
+        p.advance(p.time() + dt);
+        if (s > run - window) w = std::max(w, std::fabs(p.plate().deflection(0.5 * p.glazing().width, 0.5 * p.glazing().height)));
+    }
+    return w;
+}
+bool cracked(const Pane& p) {
+    for (const auto& G : p.glass())
+        if (!G.net.segments().empty()) return true;
+    return false;
+}
+}  // namespace
+
+TEST_CASE("resonance: a tone on the lowest mode builds the swing up by Q = 1 / (2 zeta)") {
+    const auto& lib = glstest::library();
+    const GlazingDef& g = *lib.glazing("picture_glass_2");
+    Pane slow(g, budgetForTier(1), 1), on(g, budgetForTier(1), 1), off(g, budgetForTier(1), 1);
+    const double f1 = on.plate().fundamentalHz();
+    CHECK_RANGE(f1, 100, 200);  // a voice can sing it
+    ToneLoad t;
+    t.level = 1;  // Pa: far too quiet to break anything
+    t.frequency = 0.02 * f1;
+    const double quasiStatic = toneSwing(slow, t, 2 / t.frequency, 1 / t.frequency);
+    t.frequency = f1;
+    const double tau = 1 / (g.damping * 2 * kPi * f1);  // the build-up time
+    const double resonant = toneSwing(on, t, 12 * tau, 0.05);
+    t.frequency = 0.8 * f1;
+    const double detuned = toneSwing(off, t, 12 * tau, 0.05);
+    std::cout << "    " << f1 << " Hz: quasi-static " << 1e6 * quasiStatic << " um, on resonance " << 1e6 * resonant
+              << " um (x" << resonant / quasiStatic << "), 20 % flat " << 1e6 * detuned << " um\n";
+    CHECK_RANGE(resonant / quasiStatic, 0.85 / (2 * g.damping), 1.1 / (2 * g.damping));
+    CHECK_RANGE(detuned / quasiStatic, 2.0, 4.0);  // 1 / (1 - 0.8^2) = 2.8
+    CHECK(!cracked(on));
+}
+
+TEST_CASE("resonance: loud enough on the right note breaks it; off the note it does not") {
+    const auto& lib = glstest::library();
+    const GlazingDef& g = *lib.glazing("picture_glass_2");
+    auto play = [&](double freqShare, double dB, double seconds, int chunks) {
+        Pane p(g, budgetForTier(1), 1);
+        ToneLoad t;
+        t.frequency = freqShare * p.plate().fundamentalHz();
+        t.level = 2 * std::sqrt(2.0) * 20e-6 * std::pow(10, dB / 20);  // peak, doubled by reflection at the glass
+        p.tone(t);
+        double brokeAt = -1;
+        for (int i = 1; i <= chunks && brokeAt < 0; ++i) {
+            p.advance(seconds * i / chunks);
+            if (cracked(p)) brokeAt = p.time();
+        }
+        return brokeAt;
+    };
+    const double sung = play(1.0, 145, 2, 200);
+    CHECK(sung > 0);
+    CHECK(play(0.8, 145, 2, 200) < 0);  // the same level 20 % flat
+    CHECK(play(1.0, 115, 2, 200) < 0);  // on the note, 30 dB quieter
+    // Breaking does not depend on how the host chops its frames.
+    CHECK_NEAR(play(1.0, 145, 2, 57), sung, 2.0 / 57);
+}
+
 // ---- Armoured glazing under fire --------------------------------------------------------
 
 namespace {

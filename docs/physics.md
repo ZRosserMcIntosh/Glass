@@ -255,6 +255,30 @@ A 0.9 × 1.2 m pane of 6 mm fully tempered glass under a 150 kPa, 1.5 ms shock
 and 60 kPa of gas fails about 5 ms after the shock arrives and leaves at
 15–40 m/s as a cloud of dice (tests).
 
+## 8. Tones (resonance)
+
+`Pane::tone(ToneLoad)` plays a steady note at the pane (`gls_tone` in the
+browser): a sinusoidal load of a given frequency and peak level, which follows
+a new target level with a time constant and keeps its phase when retuned, so
+a slider or a voice can sweep it. Sound arriving square on is a uniform
+pressure on the struck face (the caller passes the peak pressure at the
+glass, already doubled by the reflection), which drives only the modes odd in
+both directions; `shaker` pushes at one point instead (a 1 cm foot) and drives
+them all. The step is at most a 32nd of a cycle, and flaws are checked 24
+times a cycle. A flaw grows only near the peaks of a cyclic tension: with the
+stress-corrosion exponent n ≈ 16, ∫ max(0, sin)ⁿ over a cycle is about a tenth
+of it, so the strength is the one for 0.1 × the time the note has played
+(estimated). `toneMeter()` gives the highest share of its own strength any
+flaw has reached since it was last read, and `toneSwing()` the antinode swing
+from the plate's energy.
+
+On a mode the swing builds up to the static deflection × 1/(2ζ) over
+τ = 1/(ζω) (tested: 102 for ζ = 0.005). 2 mm picture glass, 0.30 × 0.25 m,
+rings at 135 Hz; at the glass, 130 dB never breaks it, 135 dB breaks it in
+0.8 s and 145 dB in 0.15 s. Those swings are 7 or more times the glass's
+thickness, past where the linear plate holds (see the gaps below), so they
+are lower bounds on what a real pane needs.
+
 ## Calibration constants
 
 All in [`pane.cpp`](../src/core/src/pane.cpp) and
@@ -280,6 +304,12 @@ All in [`pane.cpp`](../src/core/src/pane.cpp) and
 
 - Panes are flat and simply supported; curved windscreens are flattened and
   clamped or bonded edges are not modelled.
+- The plate is linear: a pane bent further than its own thickness does not
+  stretch and stiffen in its plane (membrane action). Very large swings, such
+  as a note held on resonance or a big pane under a blast, are therefore
+  generous. A Berger-type stretch was tried and set aside: with uniform
+  tension it relieved the stress so much that a 6 mm tempered window survived
+  a room blast that breaks it.
 - The plate model does not soften as it cracks (except the wedge and layered
   load paths under the impactor); a heavily cracked laminate is stiffer than
   the real one.

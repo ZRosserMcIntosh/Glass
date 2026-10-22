@@ -34,6 +34,22 @@
       }
     },
     {
+      "id": "picture_glass_2",
+      "name": "Picture-frame glass, 2 mm",
+      "category": "architectural",
+      "description": "Thin annealed glass from a picture frame, held lightly at its edges. Its lowest notes are in the range of a voice.",
+      "standard": "EN 572-2 (2 mm float)",
+      "width_m": 0.3,
+      "height_m": 0.25,
+      "damping": 0.005,
+      "frame_grip_Nm": 20,
+      "plies": [{ "material": "soda_lime_float", "thickness_mm": 2, "treatment": "annealed" }],
+      "provenance": {
+        "damping": "published: monolithic glass panes in frames, 0.5-2 % modal damping; a small pane held lightly by clips sits at the low end",
+        "frame_grip_Nm": "estimated"
+      }
+    },
+    {
       "id": "heat_strengthened_6",
       "name": "Heat-strengthened, 6 mm",
       "category": "architectural",

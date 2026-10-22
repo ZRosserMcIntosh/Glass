@@ -134,6 +134,19 @@ struct BlastLoad {
     Real end() const;     // after this the load is negligible
 };
 
+// A steady tone at the pane. Sound (a loudspeaker, a voice) arrives as a plane
+// wave square on: a uniform pressure on the struck face, already doubled by
+// its reflection off the glass. A shaker instead pushes at one point, as on a
+// Chladni plate. Changing the frequency or the level keeps the phase running,
+// so a slider can sweep it.
+struct ToneLoad {
+    Real frequency = 100;  // Hz
+    Real level = 0;        // peak at the glass: Pa (sound) or N (shaker)
+    Real ramp = 0.05;      // s, the time constant the level follows its target with
+    bool shaker = false;
+    Vec2 at;               // the shaker's point on the pane, m
+};
+
 struct Probe {
     Vec2 p;
     Real strength[2] = {0, 0};  // Pa: front face, back face
@@ -229,6 +242,18 @@ public:
 
     // Loads the pane with a blast wave (it can arrive later).
     void blast(const BlastLoad& b);
+    // Starts, retunes or stops (level 0) a steady tone.
+    void tone(const ToneLoad& t);
+    const ToneLoad& toneTarget() const { return tone_; }
+    Real toneLevel() const { return toneAmp_; }  // the level now, as it follows the target
+    bool toneActive() const { return tone_.level > 0 || toneAmp_ > 1e-9; }
+    // How near the glass is to breaking under a tone: the highest share of
+    // its own strength any flaw has seen since the last call (checked every
+    // 1/24 cycle), with that flaw's tension and strength, Pa.
+    Real toneMeter(Real& stress, Real& strength);
+    // How far the pane swings at its antinode under a steady tone, m: from the
+    // plate's energy, so it does not depend on when in the cycle it is read.
+    Real toneSwing() const;
     // A laminate pulled out of its frame whole, wrapped round what hit it.
     bool pulledOut() const { return pulledOut_; }
     // N/m of in-plane pull the frame holds the laminate's edge against.
@@ -305,6 +330,12 @@ private:
     std::vector<Hole> holes_;
     std::vector<BlastLoad> blasts_;
     Real blastOnset_ = -1;  // s, when a blast first loaded the pane
+    ToneLoad tone_;
+    Real toneAmp_ = 0, tonePhase_ = 0, toneOnset_ = -1;
+    Real meterRatio_ = 0, meterStress_ = 0, meterStrength_ = 0;
+    void toneMeterCheck();
+    Real toneValue(Real dt) const;  // the tone's load held over the next dt
+    Real strengthFactor() const;     // the loading-rate factor on strength for the load now
     bool pulledOut_ = false;
 };
 
