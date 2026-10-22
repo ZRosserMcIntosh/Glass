@@ -279,6 +279,17 @@ rings at 135 Hz; at the glass, 130 dB never breaks it, 135 dB breaks it in
 thickness, past where the linear plate holds (see the gaps below), so they
 are lower bounds on what a real pane needs.
 
+## 8b. Spontaneous breakage (nickel sulfide)
+
+`Pane::nickelSulfide(at, diameter)` (`gls_nickel_sulfide`): a nickel-sulfide
+stone that has changed phase years after tempering and opened a crack its own
+size. In a tempered ply's core tension that is a penny crack driven by
+K = 2σ_t √(a/π); past K_Ic the ply starts dicing from the point, exactly as if a
+flaw had failed there (critical diameter 2π (K_Ic / 2σ_t)², 0.35 mm for the
+10 mm storefront panel). Annealed and laminated plies have no core tension to
+drive it. A pane that broke by itself is not "quiet" until its cracks have been
+cut into pieces.
+
 ## 9. Prince Rupert's drop
 
 `RupertDrop` (`gls/rupert.hpp`, `gls_drop_*` in the browser) is a body of

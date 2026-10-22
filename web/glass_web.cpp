@@ -447,6 +447,16 @@ GLS_EXPORT double gls_mode_hz(int m, int n) {
     return S.pane->plate().modeHz(m, n);
 }
 
+// A nickel-sulfide stone of `diameterMm` at pane point (x, y), years after
+// tempering. Returns 1 if it broke the pane; what happened goes to the text buffer.
+GLS_EXPORT int gls_nickel_sulfide(double x, double y, double diameterMm) {
+    Sim& S = sim();
+    if (!S.pane) return 0;
+    const bool broke = S.pane->nickelSulfide({x, y}, diameterMm * 1e-3);
+    putText(S.pane->events().empty() ? std::string() : S.pane->events().back());
+    return broke ? 1 : 0;
+}
+
 // ---- Prince Rupert's drop ----
 // A new drop: head radius, length, tip radius (mm), surface compression and
 // core tension (MPa), seed. Glass is soda-lime.

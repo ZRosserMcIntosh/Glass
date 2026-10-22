@@ -242,6 +242,12 @@ public:
 
     // Loads the pane with a blast wave (it can arrive later).
     void blast(const BlastLoad& b);
+    // A nickel-sulfide stone of `diameter` (m) in the glass at pane point
+    // `at`, years after tempering: it has changed phase and swollen, opening a
+    // crack its own size. In the tensile core of a tempered ply, a crack that
+    // size is driven by the core tension, K = 2 sigma_t sqrt(a / pi); past
+    // K_Ic the ply dices with nothing touching it. Returns whether it broke.
+    bool nickelSulfide(Vec2 at, Real diameter);
     // Starts, retunes or stops (level 0) a steady tone.
     void tone(const ToneLoad& t);
     const ToneLoad& toneTarget() const { return tone_; }

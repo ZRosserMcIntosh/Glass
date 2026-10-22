@@ -223,8 +223,12 @@ bool Pane::quiet() const {
         if (time_ < b.end()) return false;
     for (const auto& I : imp_)
         if (I.phase != ImpactorPhase::Done) return false;
-    for (const auto& G : glass_)
+    for (const auto& G : glass_) {
         if (G.net.activeTips() > 0) return false;
+        // Cracks not cut into pieces yet (with nothing else going on, a ply that
+        // broke by itself would otherwise never be).
+        if (monolithic_ && !G.net.segments().empty() && G.net.topology() != G.builtRevision) return false;
+    }
     for (const auto& f : frags_.fragments())
         if (!f.retired && (f.state == FragmentState::Free || f.state == FragmentState::Pending)) return false;
     for (const auto& sh : sheets_)
@@ -1574,6 +1578,38 @@ Real BlastLoad::pressure(Real t) const {
 }
 
 Real BlastLoad::end() const { return arrival + std::max(4 * duration, gasPeak > 0 ? 6 * gasTau : 0.0); }
+
+bool Pane::nickelSulfide(Vec2 at, Real diameter) {
+    at = {clampr(at.x, 0.02, def_.width - 0.02), clampr(at.y, 0.02, def_.height - 0.02)};
+    for (std::size_t g = 0; g < glass_.size(); ++g) {
+        GlassPly& G = glass_[g];
+        if (G.fragmented || !G.net.glassAt(at)) continue;
+        if (!G.dicing || G.centralTension <= 0) {
+            log(fmt("a %.2f mm nickel-sulfide stone in ply %.0f: without a tempered core in tension round it, it stays put",
+                    1e3 * diameter, static_cast<double>(g + 1)));
+            continue;
+        }
+        // A penny crack the stone's size in the core tension.
+        const Real K = 2 * G.centralTension * std::sqrt(0.5 * diameter / kPi);
+        const Real critical = 2 * kPi * sq(G.mat->toughness / (2 * G.centralTension));
+        if (K < G.mat->toughness) {
+            log(fmt("a %.2f mm nickel-sulfide stone in ply %.0f: K = %.2f MPa sqrt m", 1e3 * diameter,
+                    static_cast<double>(g + 1), K / 1e6) +
+                fmt(", under the glass's %.2f: the pane lives (stones over %.2f mm break it)", G.mat->toughness / 1e6,
+                    1e3 * critical));
+            continue;
+        }
+        lastDynamic_ = lastLoaded_ = time_;
+        if (G.originTime < 0) { G.origin = at; G.originTime = time_; }
+        startRadials(static_cast<int>(g), at, G.net.cell(), 6, G.net.newGroup(), CrackKind::Dicing, G.mat->crackSpeed);
+        log(fmt("a %.2f mm nickel-sulfide stone in the core of ply %.0f swelled as it changed phase: K = %.2f MPa sqrt m "
+                "from the core tension alone, past the glass's toughness",
+                1e3 * diameter, static_cast<double>(g + 1), K / 1e6) +
+            fmt("; the ply dices from it (stones over %.2f mm do)", 1e3 * critical));
+        return true;
+    }
+    return false;
+}
 
 // The loading-rate factor on strength for what loads the pane now: the
 // latest impact or blast; else a tone, by its equivalent time at peak.

@@ -484,6 +484,24 @@ TEST_CASE("cannonball: a thin interlayer tears round the ball; a bullet still pl
     CHECK(b.report.embedded);
 }
 
+// ---- Spontaneous breakage ------------------------------------------------------------------
+
+TEST_CASE("tempered: a big enough nickel-sulfide stone in the core breaks the pane with nothing touching it") {
+    const auto& lib = glstest::library();
+    Pane small(*lib.glazing("tempered_6"), budgetForTier(1), 2), big(*lib.glazing("tempered_6"), budgetForTier(1), 2);
+    CHECK(!small.nickelSulfide({0.45, 0.4}, 0.05e-3));
+    CHECK(big.nickelSulfide({0.45, 0.4}, 0.5e-3));
+    big.advance(0.5);
+    small.advance(0.5);
+    CHECK(big.status().cracked);
+    CHECK(big.fragments().fragments().size() > 100);
+    CHECK(!small.status().cracked);
+    std::cout << "    " << big.events()[0] << "\n";
+    // Annealed glass has no core in tension to drive it.
+    Pane annealed(*lib.glazing("annealed_6"), budgetForTier(1), 2);
+    CHECK(!annealed.nickelSulfide({0.45, 0.4}, 0.5e-3));
+}
+
 // ---- Resonance ----------------------------------------------------------------------------
 
 namespace {
