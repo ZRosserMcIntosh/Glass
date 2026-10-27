@@ -410,7 +410,7 @@ void Pane::stepImpactor(int k, Real dt) {
                 if (I.side * (noseZ - face) >= 0) {
                     const bool inside = p.x > 0 && p.y > 0 && p.x < W && p.y < H;
                     const GlassPly& first = I.side > 0 ? glass_.front() : glass_.back();
-                    if (!inside || !first.net.glassAt(p)) {
+                    if (!inside || !solidAt(first, p)) {
                         I.through = true;  // missed, or through an existing hole
                         if (inside) I.report.outcome = "Passed through an existing hole";
                     } else if (I.touched) {
@@ -436,6 +436,13 @@ void Pane::stepImpactor(int k, Real dt) {
                     } else {
                         I.hit = p;
                         beginContact(k);
+                        // A pane already in pieces: what it lands on is a piece
+                        // still in the frame, which it shoves out of the way.
+                        if (monolithic_ && I.phase == ImpactorPhase::Contact) {
+                            bool loose = true;
+                            for (std::size_t g = 0; g < glass_.size(); ++g) loose = loose && glass_[g].fragmented && I.brokenAtLoad[g];
+                            if (loose) passThrough(k, 0);
+                        }
                         return;
                     }
                 }
@@ -1088,6 +1095,15 @@ void Pane::breakAtLoad(int k, int g, Real sigma, Real strength, int radials) {
     }
 }
 
+bool Pane::solidAt(const GlassPly& G, Vec2 p) const {
+    if (!G.net.glassAt(p)) return false;
+    if (!G.fragmented) return true;
+    const int f = frags_.fragmentAt(G.ply, p);
+    if (f < 0) return true;  // on a crack line between pieces
+    const Fragment& fr = frags_.fragments()[f];
+    return !fr.retired && fr.state == FragmentState::Held;
+}
+
 void Pane::passThrough(int k, Real) {
     Impactor& I = imp_[k];
     if (I.pushing) return;
@@ -1100,7 +1116,12 @@ void Pane::passThrough(int k, Real) {
     I.report.penetrated = true;
     bool diced = false;
     for (const auto& G : glass_) diced = diced || (G.dicing && G.originTime >= 0);
-    if (diced || I.def.kind == ImpactorKind::SoftBody) {
+    // Wedges bend from the roots of this load's own radial cracks. Glass that
+    // was already broken where it lands (a second object into a cracked pane)
+    // has none: its loose pieces are shoved aside like dice.
+    bool ownStar = false;
+    for (const auto& st : stars_) ownStar = ownStar || st.impactor == k;
+    if (diced || !ownStar || I.def.kind == ImpactorKind::SoftBody) {
         // Nothing left to push against: the load collapses as the glass crumbles.
         I.wedge = false;
         const Real mPush = lam_.massPerArea * kPi * sq(kPushRadius * R);

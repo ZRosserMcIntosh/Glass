@@ -40,7 +40,7 @@ struct Sim {
     std::vector<double> state, imps, plies, report;
     std::vector<float> cracks, frags, poses, field;
     std::vector<float> sprays, crushes;
-    std::vector<std::int32_t> labels;
+    std::vector<std::int32_t> labels, sheetIds;
     std::unique_ptr<RupertDrop> drop;  // a Prince Rupert's drop, apart from the panes
     std::vector<double> dropState;
     std::vector<float> dropFrags;
@@ -305,6 +305,31 @@ GLS_EXPORT int gls_fire_as(int index, double x, double y, double speed, double y
     return S.pane->fire(d, {x, y}, speed, yaw, pitch, fromBack != 0, lead);
 }
 
+// A blunt body made up on the spot (built on impactor `index` for whatever
+// it does not set): mass (kg), the radius of its nose (m), its kind (0 sphere,
+// 2 flat), and the elastic constants and restitution of what it hits with.
+// What a stack of panes fires into the next pane when a ripped-out sheet
+// arrives there: the sheet wrapped round a cannonball, or a window flying
+// face first.
+GLS_EXPORT int gls_fire_body(int index, double x, double y, double speed, double yaw, double pitch, int fromBack,
+                             double lead, double mass, double radius, int kind, double youngs, double poisson,
+                             double restitution) {
+    Sim& S = sim();
+    if (!S.pane || index < 0 || index >= static_cast<int>(S.lib.impactors.size()) || mass <= 0 || radius <= 0) return -1;
+    ImpactorDef d = S.lib.impactors[index];
+    d.kind = kind == 2 ? ImpactorKind::Flat : ImpactorKind::Sphere;
+    d.mass = mass;
+    d.radius = d.contactRadius = radius;
+    d.length = 0;
+    d.youngs = youngs > 0 ? youngs : d.youngs;
+    d.poisson = poisson > 0 ? poisson : d.poisson;
+    d.restitution = std::clamp(restitution, 0.0, 1.0);
+    d.density = mass / (4.0 / 3.0 * kPi * radius * radius * radius);
+    d.yield = 0;
+    d.pellets = 1;
+    return S.pane->fire(d, {x, y}, speed, yaw, pitch, fromBack != 0, lead);
+}
+
 // Takes fragment record i out of the scene (it has become something else's
 // impactor). Returns 1 if it was there.
 GLS_EXPORT int gls_drop_fragment(int i) {
@@ -563,6 +588,21 @@ GLS_EXPORT int gls_fragment_sheet(int i) {
     if (i < 0 || i >= static_cast<int>(fs.fragments().size())) return -1;
     const int c = fs.fragments()[i].clump;
     return c >= 0 && fs.clumps()[c].bonded ? c : -1;
+}
+
+// Which bonded sheet (clump index) every fragment record belongs to, -1 for
+// none: one int32 per record, as gls_fragment_sheet gives them one at a time.
+GLS_EXPORT std::int32_t* gls_fragment_sheets() {
+    Sim& S = sim();
+    S.sheetIds.clear();
+    if (!S.pane) return S.sheetIds.data();
+    auto& fs = S.pane->fragments();
+    S.sheetIds.resize(fs.fragments().size());
+    for (std::size_t i = 0; i < fs.fragments().size(); ++i) {
+        const int c = fs.fragments()[i].clump;
+        S.sheetIds[i] = c >= 0 && fs.clumps()[c].bonded ? c : -1;
+    }
+    return S.sheetIds.data();
 }
 
 // The sheet impactor k is wrapped in (a clump index), or -1.

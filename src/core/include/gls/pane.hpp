@@ -294,6 +294,8 @@ private:
     int fireOne(const ImpactorDef& def, Vec2 at, Real speed, Real yaw, Real pitch, bool fromBack, Real lead);
     void crush(int g, Vec2 c, Real r, std::uint32_t group, int kind);
     void passThrough(int k, Real massShare);
+    // Glass a strike can meet at p in ply G: not a hole, nor a piece that has left the frame.
+    bool solidAt(const GlassPly& G, Vec2 p) const;
     void ballisticEvents(int k);
     void growCracks(Real dt);
     void ringCracks();
