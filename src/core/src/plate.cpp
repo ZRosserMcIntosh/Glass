@@ -179,6 +179,35 @@ void ModalPlate::addPatch(Real x, Real y, Real radius, Real force) {
     }
 }
 
+void ModalPlate::addPressureField(const std::vector<Real>& p, int nx, int ny) {
+    if (nx != fieldNx_ || ny != fieldNy_) {
+        fieldNx_ = nx, fieldNy_ = ny;
+        // The integral of sin(m pi x / a) over each cell, and likewise in y.
+        fieldX_.assign(static_cast<std::size_t>(M_) * nx, 0);
+        fieldY_.assign(static_cast<std::size_t>(N_) * ny, 0);
+        for (int m = 1; m <= M_; ++m)
+            for (int i = 0; i < nx; ++i)
+                fieldX_[(m - 1) * nx + i] = a_ / (m * kPi) * (std::cos(m * kPi * i / nx) - std::cos(m * kPi * (i + 1) / nx));
+        for (int k = 1; k <= N_; ++k)
+            for (int j = 0; j < ny; ++j)
+                fieldY_[(k - 1) * ny + j] = b_ / (k * kPi) * (std::cos(k * kPi * j / ny) - std::cos(k * kPi * (j + 1) / ny));
+    }
+    // Over y first (per column of cells and mode k), then over x.
+    fieldT_.assign(static_cast<std::size_t>(nx) * N_, 0);
+    for (int i = 0; i < nx; ++i)
+        for (int k = 0; k < N_; ++k) {
+            Real s = 0;
+            for (int j = 0; j < ny; ++j) s += p[static_cast<std::size_t>(j) * nx + i] * fieldY_[static_cast<std::size_t>(k) * ny + j];
+            fieldT_[static_cast<std::size_t>(i) * N_ + k] = s;
+        }
+    for (int m = 0; m < M_; ++m)
+        for (int k = 0; k < N_; ++k) {
+            Real s = 0;
+            for (int i = 0; i < nx; ++i) s += fieldX_[static_cast<std::size_t>(m) * nx + i] * fieldT_[static_cast<std::size_t>(i) * N_ + k];
+            f_[static_cast<std::size_t>(m) * N_ + k] += s / modalMass_;
+        }
+}
+
 void ModalPlate::addPressure(Real p) {
     if (p == 0) return;
     for (int m = 1; m <= M_; m += 2)

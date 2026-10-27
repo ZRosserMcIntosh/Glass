@@ -128,15 +128,33 @@ struct CrushMark {
 // A blast wave over the whole pane (+ pushes toward the back face): the
 // shock, reflected at the glass, as a Friedlander pulse; then, for a charge
 // in a closed room, the quasi-static pressure of its gas while the room vents.
+//
+// Or from a charge at a point (point = true): the shock then reaches each point
+// of the glass at its own time, as hard as its distance and its angle to the
+// charge give (Kinney & Graham free-air TNT, reflected at the glass), so the
+// glass nearest the charge is hit first and hardest. Pane::blast() fills in
+// the tables and arrival (at the nearest point) from charge, at, standoff.
 struct BlastLoad {
-    Real arrival = 0;     // s, engine time the shock reaches the pane
-    Real peak = 0;        // Pa, reflected peak overpressure
+    Real arrival = 0;     // s, engine time the shock reaches the pane (point: its nearest point)
+    Real peak = 0;        // Pa, reflected peak overpressure (point: + toward the back face, or -)
     Real duration = 0;    // s, positive phase
     Real decay = 1;       // Friedlander waveform coefficient
     Real gasPeak = 0;     // Pa, quasi-static gas pressure (0: open air)
     Real gasRise = 1e-3;  // s
     Real gasTau = 0;      // s, venting time constant
-    Real pressure(Real t) const;
+
+    bool point = false;
+    Real detonation = 0;  // s, engine time the charge goes off
+    Real charge = 0;      // kg TNT equivalent
+    Vec2 at;              // m, the charge's foot on the pane's plane (may lie off the pane)
+    Real standoff = 0;    // m, its distance from that plane
+    Real side = 1;        // +1: pushes toward the back face
+    Real scale = 1;       // on the shock's peak (e.g. diffracted round a building)
+    Real lastArrival = 0, shortest = 0, longest = 0;   // s: the far corner's arrival; positive phases
+    std::vector<Real> tabR, tabT, tabPs, tabPr, tabTd, tabB;   // by distance: arrival, side-on, reflected, phase, decay
+
+    Real pressure(Real t) const;          // uniform blasts; for a point, its gas alone
+    Real pressureAt(Real t, Vec2 p) const;
     Real end() const;     // after this the load is negligible
 };
 
@@ -284,7 +302,8 @@ public:
     // N/m of in-plane pull the frame holds the laminate's edge against.
     Real edgeHold() const;
     Real bendLength();
-    Real blastPressure(Real t) const;  // Pa, all blasts at engine time t
+    Real blastPressure(Real t) const;  // Pa, all blasts at engine time t, where they press hardest
+    Real blastPressureAt(Real t, Vec2 p) const;  // Pa, all blasts at engine time t at pane point p
     const std::vector<BlastLoad>& blasts() const { return blasts_; }
 
 private:
@@ -310,9 +329,11 @@ private:
     void probeChecks();
     void freezeCheck();
     void releaseFragment(int index);
-    void blowOut(Real p);
+    void blowOut();
     void pullOut(int k, Real edgePull);
-    bool breakUnderBlast(int g, Real p, std::size_t from);
+    bool breakUnderBlast(int g, std::size_t from);
+    bool pointBlasts_ = false;
+    std::vector<Real> blastGrid_;   // the pressure field on a grid over the pane, for the plate
     Real rateFactor(Real loadTime) const;
     Real nearFieldAt(Vec2 p) const;
     PlaneStress stressFromCurvature(int g, bool back, const Curvature& k, Real extraIso, bool layered = false) const;

@@ -754,6 +754,35 @@ TEST_CASE("blast: a weak blast leaves a tempered window whole") {
     CHECK(!p.status().cracked);
 }
 
+TEST_CASE("blast: a charge beside the glass hits the nearest of it first and hardest") {
+    // 220 g of TNT 0.3 m in front of the bottom of a 1.1 x 2.55 m pane of
+    // 10 mm annealed plate. Averaged over the pane (the shock at its centre,
+    // the same everywhere) it would not break; from a point, the glass beside
+    // the charge takes MPa and goes at once, low first.
+    const auto& lib = glstest::library();
+    BlastLoad b;
+    b.point = true;
+    b.charge = 0.22;
+    b.at = {0.55, 0.25};
+    b.standoff = 0.3;
+    Pane p(*lib.glazing("annealed_10"), budgetForTier(2), 1);
+    p.setFloor(-0.05);
+    p.blast(b);
+    const BlastLoad& in = p.blasts().front();
+    CHECK_RANGE(in.arrival, 0.05e-3, 0.15e-3);     // the nearest glass: under 0.1 ms
+    CHECK(in.lastArrival > 20 * in.arrival);       // the far corner, 2.4 m away: ms later
+    CHECK(in.pressureAt(in.arrival + 1e-6, {0.55, 0.25}) > 10e6);
+    CHECK(std::fabs(in.pressureAt(in.arrival + 1e-6, {0.55, 2.4})) == 0);   // not there yet
+    p.advance(2e-3);
+    CHECK(p.status().cracked);
+    p.advance(0.01);
+    int low = 0, high = 0;
+    for (const auto& f : p.fragments().fragments())
+        if (!f.retired && f.state == FragmentState::Free && f.vel.z > 5) (f.pos.y < 1.0 ? low : high)++;
+    CHECK(low > 100);
+    CHECK(low > high);
+}
+
 TEST_CASE("blast: a storefront of annealed plate comes out in pieces, not sheets") {
     // A room blast on a 1.1 x 2.55 m pane of 10 mm annealed plate. The gas keeps
     // pushing on the broken glass, so no piece much longer than

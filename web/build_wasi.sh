@@ -13,7 +13,7 @@ EXPORTS=""
 for f in gls_text gls_text_length gls_load gls_resolve gls_error_text gls_catalog gls_new_pane gls_set_floor \
          gls_fire gls_advance gls_time gls_last_step gls_state gls_plies gls_impactors gls_report gls_events \
          gls_cracks gls_fragment_shapes gls_fragment_poses gls_sprays gls_crushes gls_fragment_map gls_field gls_count_fragments gls_bench \
-         gls_select gls_free_pane gls_blast gls_new_pane_sized gls_fire_as gls_drop_fragment gls_fragment_sheet gls_carried_sheet gls_sheet_mass gls_tone gls_tone_level gls_stress_strength gls_mode_hz gls_tone_swing gls_drop_new gls_drop_snip gls_drop_strike gls_drop_advance gls_drop_state gls_drop_fragments gls_drop_radius gls_drop_residual gls_nickel_sulfide gls_score_begin gls_score_point gls_score_end gls_fire_body gls_fragment_sheets; do
+         gls_select gls_free_pane gls_blast gls_blast_point gls_new_pane_sized gls_fire_as gls_drop_fragment gls_fragment_sheet gls_carried_sheet gls_sheet_mass gls_tone gls_tone_level gls_stress_strength gls_mode_hz gls_tone_swing gls_drop_new gls_drop_snip gls_drop_strike gls_drop_advance gls_drop_state gls_drop_fragments gls_drop_radius gls_drop_residual gls_nickel_sulfide gls_score_begin gls_score_point gls_score_end gls_fire_body gls_fragment_sheets; do
   EXPORTS="$EXPORTS -Wl,--export=$f"
 done
 # Two builds: glass.wasm uses WebAssembly SIMD (about 1.4x faster),

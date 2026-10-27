@@ -278,6 +278,30 @@ GLS_EXPORT int gls_blast(double arrival, double peak, double duration, double de
     return 1;
 }
 
+// A charge going off at engine time `detonation`: `charge` kg TNT at pane point
+// (x, y) projected on the pane's plane, `standoff` m from it; side +1 pushes
+// toward the back face; `scale` on the shock's peak; the room's gas as in
+// gls_blast. The engine gives each point of the glass its own arrival, peak
+// and positive phase.
+GLS_EXPORT int gls_blast_point(double detonation, double charge, double x, double y, double standoff, double side,
+                               double scale, double gasPeak, double gasRise, double gasTau) {
+    Sim& S = sim();
+    if (!S.pane || charge <= 0) return 0;
+    BlastLoad b;
+    b.point = true;
+    b.detonation = detonation;
+    b.charge = charge;
+    b.at = {x, y};
+    b.standoff = std::fabs(standoff);
+    b.side = side < 0 ? -1 : 1;
+    b.scale = std::max(scale, 0.0);
+    b.gasPeak = std::max(gasPeak, 0.0);
+    b.gasRise = std::max(gasRise, 1e-6);
+    b.gasTau = std::max(gasTau, 0.0);
+    S.pane->blast(b);
+    return 1;
+}
+
 GLS_EXPORT void gls_set_floor(double y) {
     if (sim().pane) sim().pane->setFloor(y);
 }

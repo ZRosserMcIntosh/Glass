@@ -586,8 +586,10 @@ void FragmentSystem::stepClumps(Real dt, Real time, Rng& rng) {
         for (const int k : c.members) area += frags_[k].area;
         const Vec3 drag = c.vel * (-0.5 * kAirDensity * 1.2 * 0.5 * area * sp);
         c.vel += (Vec3{0, -kGravity, 0} + drag / c.mass) * dt;
-        if (pushPressure != 0 && inOpening(c.pos) && std::fabs(c.pos.z) < pushReach)
-            c.vel.z += pushPressure * (1 - std::fabs(c.pos.z) / pushReach) * area / c.mass * dt;
+        if (pushPressure != 0 && inOpening(c.pos) && std::fabs(c.pos.z) < pushReach) {
+            const Real p = pushField ? pushField(c.pos.x, c.pos.y) : pushPressure;
+            c.vel.z += p * (1 - std::fabs(c.pos.z) / pushReach) * area / c.mass * dt;
+        }
         c.omega *= std::exp(-0.6 * dt);
         c.pos += c.vel * dt;
         c.rot.integrate(c.omega, dt);
@@ -755,7 +757,7 @@ void FragmentSystem::step(Real dt, Real time, Rng& rng) {
         // Gas venting through the opening drives the pieces still in it.
         if (pushPressure != 0 && inOpening(f.pos)) {
             const Real d = std::fabs(f.pos.z);
-            if (d < pushReach) f.vel.z += pushPressure * (1 - d / pushReach) * f.area / f.mass * dt;
+            if (d < pushReach) f.vel.z += (pushField ? pushField(f.pos.x, f.pos.y) : pushPressure) * (1 - d / pushReach) * f.area / f.mass * dt;
         }
         f.omega *= spinDecay;
         f.pos += f.vel * dt;

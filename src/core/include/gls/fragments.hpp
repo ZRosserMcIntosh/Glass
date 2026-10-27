@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "gls/cracks.hpp"
@@ -129,6 +130,7 @@ public:
     // still in the opening (`pushSize`, from the pane's corner) and near its
     // plane, + toward the back face, fading to nothing `pushReach` m either side.
     Real pushPressure = 0, pushReach = 0.6;
+    std::function<Real(Real, Real)> pushField;   // if set: the push (Pa) at a point of the opening, for pushPressure
     Vec2 pushSize;
     std::uint64_t revision = 0;   // bumps when fragments are added or split
 

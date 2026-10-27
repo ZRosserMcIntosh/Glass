@@ -41,6 +41,7 @@ the layouts itself (a worker copying them out, say).
 | `gls_select(slot)` | picks which of 32 pane slots every other call works on (a building's windows); each keeps its own pane and clock |
 | `gls_free_pane()` | drops the selected slot's pane |
 | `gls_blast(arrival, peak, duration, decay, gasPeak, gasRise, gasTau)` | a blast wave on the pane: Friedlander shock (reflected peak Pa, positive phase s) arriving at engine time `arrival`, plus a confined charge's gas pressure rising and venting; + pushes toward the back face |
+| `gls_blast_point(detonation, charge, x, y, standoff, side, scale, gasPeak, gasRise, gasTau)` | a charge of `charge` kg TNT going off at engine time `detonation`, at pane point (x, y) projected on the pane's plane and `standoff` m from it: every point of the glass gets its own arrival, peak (reflected head-on, side-on at grazing) and positive phase from free-air TNT (Kinney & Graham), so the glass nearest the charge is hit first and hardest; `side` +1 pushes toward the back face, `scale` multiplies the shock's peak; the room's gas as for `gls_blast` |
 | `gls_fire_body(index, x, y, speed, yaw, pitch, fromBack, lead, mass, radius, kind, youngs, poisson, restitution)` | fires a blunt body made up on the spot (built on impactor `index`): its mass, nose radius, kind (0 sphere, 2 flat), and the elastic constants and restitution of what leads; a host of several panes fires a sheet ripped out of one into the next this way |
 | `G.fragmentSheets(n)` | int32 per fragment record: the bonded sheet (clump) it is part of, −1 none |
 

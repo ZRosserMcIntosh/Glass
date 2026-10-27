@@ -274,8 +274,22 @@ Real Pane::chooseStep() const {
     for (const auto& G : glass_)
         if (G.net.activeTips() > 0) dt = std::min(dt, 0.5 * G.net.cell() / G.mat->crackSpeed);
     for (const auto& b : blasts_) {
+        // A charge nearby: the shock sweeps the pane from its nearest point to
+        // its far corner, the pulse lengthening as it goes; step on the pulse
+        // that has most recently arrived (the shortest still going).
+        const Real sweep = b.point ? b.lastArrival + 2 * b.longest : b.arrival + 2 * b.duration;
+        Real pulse = b.duration;
+        if (b.point && time_ >= b.arrival) {
+            const Real since = time_ - b.detonation;
+            const auto it = std::upper_bound(b.tabT.begin(), b.tabT.end(), since);
+            const std::size_t i = std::min<std::size_t>(it - b.tabT.begin(), b.tabT.size() - 1);
+            // The front is at tabR[i]; what arrived a pulse-length ago still matters.
+            std::size_t k = i;
+            while (k > 0 && since - b.tabT[k - 1] < 2 * b.tabTd[k - 1]) --k;
+            pulse = std::max(b.shortest, b.tabTd[k]);
+        }
         if (time_ < b.arrival) dt = std::min(dt, std::max(0.2e-6, b.arrival - time_));          // land on the shock
-        else if (time_ < b.arrival + 2 * b.duration) dt = std::min(dt, std::max(0.2e-6, b.duration / 50));
+        else if (time_ < sweep) dt = std::min(dt, std::max(0.2e-6, pulse / 50));
         else if (time_ < b.end()) dt = std::min(dt, 50e-6);
     }
     if (toneActive()) dt = std::min(dt, 1 / (kToneStepsPerCycle * std::max(tone_.frequency, 1.0)));
@@ -312,7 +326,22 @@ void Pane::step(Real dt) {
     lastDt_ = dt;
     plate_.clearForces();
     const Real pb = blastPressure(time_);
-    plate_.addPressure(def_.pressure + pb);
+    bool field = false;
+    for (const auto& b : blasts_) field = field || (b.point && time_ >= b.arrival && time_ < b.end());
+    if (field) {
+        // A charge nearby: the pressure over a grid of cells about 5 cm square,
+        // each as hard as its own distance gives.
+        const int nx = std::clamp(static_cast<int>(std::lround(def_.width / 0.05)), 4, 48);
+        const int ny = std::clamp(static_cast<int>(std::lround(def_.height / 0.05)), 4, 48);
+        blastGrid_.resize(nx * ny);
+        for (int j = 0; j < ny; ++j)
+            for (int i = 0; i < nx; ++i)
+                blastGrid_[j * nx + i] = blastPressureAt(time_, {(i + 0.5) * def_.width / nx, (j + 0.5) * def_.height / ny});
+        plate_.addPressure(def_.pressure);
+        plate_.addPressureField(blastGrid_, nx, ny);
+    } else {
+        plate_.addPressure(def_.pressure + pb);
+    }
     const bool toned = toneActive();
     if (toned) {
         const Real F = toneValue(dt);
@@ -369,12 +398,16 @@ void Pane::step(Real dt) {
     constexpr Real kFragmentStep = 0.5e-3;
     if (time_ - fragTime_ >= kFragmentStep) {
         const Real pf = blastPressure(time_);
-        if (std::fabs(pf) > kBlastHold) blowOut(pf);
+        if (std::fabs(pf) > kBlastHold) blowOut();
         while (time_ - fragTime_ >= kFragmentStep) {
             fragTime_ += kFragmentStep;
             for (auto& sh : sheets_)
                 if (sh.active()) sh.step(frags_, fragTime_, rng_, [this](int f) { releaseFragment(f); });
             frags_.pushPressure = blastPressure(fragTime_);
+            if (pointBlasts_) {
+                const Real tf = fragTime_;
+                frags_.pushField = [this, tf](Real x, Real y) { return blastPressureAt(tf, {x, y}); };
+            }
             frags_.step(kFragmentStep, fragTime_, rng_);
         }
     }
@@ -1662,13 +1695,62 @@ Real BlastLoad::pressure(Real t) const {
     if (tau < 0) return 0;
     Real p = 0;
     // Friedlander: the positive phase, then a shallow suction, cut off once negligible.
-    if (duration > 0 && tau < 4 * duration) p += peak * (1 - tau / duration) * std::exp(-decay * tau / duration);
+    if (!point && duration > 0 && tau < 4 * duration) p += peak * (1 - tau / duration) * std::exp(-decay * tau / duration);
     if (gasPeak > 0 && gasTau > 0)
         p += gasPeak * (1 - std::exp(-tau / std::max(gasRise, 1e-6))) * std::exp(-tau / gasTau);
     return p;
 }
 
-Real BlastLoad::end() const { return arrival + std::max(4 * duration, gasPeak > 0 ? 6 * gasTau : 0.0); }
+Real BlastLoad::pressureAt(Real t, Vec2 q) const {
+    if (!point) return pressure(t);
+    Real p = pressure(t);   // the room's gas, the same everywhere
+    const Real R = std::sqrt(sq(q.x - at.x) + sq(q.y - at.y) + sq(standoff));
+    if (tabR.size() < 2 || t < detonation + tabT.front()) return p;
+    // Interpolated by distance.
+    const auto it = std::upper_bound(tabR.begin(), tabR.end(), R);
+    const std::size_t i = std::min<std::size_t>(std::max<std::size_t>(it - tabR.begin(), 1), tabR.size() - 1);
+    const Real u = clampr((R - tabR[i - 1]) / (tabR[i] - tabR[i - 1]), 0, 1);
+    auto lerp = [&](const std::vector<Real>& v) { return v[i - 1] + u * (v[i] - v[i - 1]); };
+    const Real tau = t - detonation - lerp(tabT), td = lerp(tabTd);
+    if (tau < 0 || tau > 4 * td) return p;
+    // Reflected head-on, side-on at grazing: between by the angle of incidence.
+    const Real ps = lerp(tabPs), cosI = standoff / std::max(R, 1e-6);
+    const Real peak0 = scale * (ps + (lerp(tabPr) - ps) * cosI * cosI);
+    return p + side * peak0 * (1 - tau / td) * std::exp(-lerp(tabB) * tau / td);
+}
+
+Real BlastLoad::end() const {
+    if (point) return std::max(lastArrival + 4 * longest, gasPeak > 0 ? arrival + 6 * gasTau : 0.0);
+    return arrival + std::max(4 * duration, gasPeak > 0 ? 6 * gasTau : 0.0);
+}
+
+// Free-air TNT (Kinney & Graham 1985) at scaled distance Z = R / W^(1/3) (m/kg^1/3).
+namespace {
+constexpr Real kP0 = 101325, kC0 = 343;
+Real sideOnTNT(Real Z) {
+    return kP0 * 808 * (1 + sq(Z / 4.5)) / std::sqrt((1 + sq(Z / 0.048)) * (1 + sq(Z / 0.32)) * (1 + sq(Z / 1.35)));
+}
+Real phaseTNT(Real Z, Real W) {   // s, positive phase
+    return 1e-3 * std::cbrt(W) * 980 * (1 + std::pow(Z / 0.54, 10)) /
+           ((1 + std::pow(Z / 0.02, 3)) * (1 + std::pow(Z / 0.74, 6)) * std::sqrt(1 + sq(Z / 6.9)));
+}
+Real impulseTNT(Real Z, Real W) {   // Pa s, side-on
+    return 100 * std::cbrt(W) * 0.067 * std::sqrt(1 + std::pow(Z / 0.23, 4)) / (Z * Z * std::cbrt(1 + std::pow(Z / 1.55, 3)));
+}
+Real reflectedTNT(Real p) { return 2 * p * (7 * kP0 + 4 * p) / (7 * kP0 + p); }
+// The Friedlander decay giving impulse I for peak p over td.
+Real decayFor(Real I, Real p, Real td) {
+    auto f = [](Real b) { return 1 / b - (1 - std::exp(-b)) / (b * b); };
+    const Real want = I / (p * td);
+    if (want >= f(0.05)) return 0.05;
+    Real lo = 0.05, hi = 20;
+    for (int i = 0; i < 50; ++i) {
+        const Real m = 0.5 * (lo + hi);
+        (f(m) > want ? lo : hi) = m;
+    }
+    return 0.5 * (lo + hi);
+}
+}  // namespace
 
 bool Pane::nickelSulfide(Vec2 at, Real diameter) {
     at = {clampr(at.x, 0.02, def_.width - 0.02), clampr(at.y, 0.02, def_.height - 0.02)};
@@ -1850,7 +1932,52 @@ Real Pane::toneMeter(Real& stress, Real& strength) {
     return r;
 }
 
-void Pane::blast(const BlastLoad& b) {
+void Pane::blast(const BlastLoad& in) {
+    BlastLoad b = in;
+    if (b.point) {
+        // By distance, out to the far corner: when the shock gets there (its
+        // front runs at c0 sqrt(1 + 6p/7P0)), how hard, for how long. Inside
+        // 0.3 m the free-air fits are held at their 0.3 m values.
+        const Real W = std::max(b.charge, 1e-4), cw = std::cbrt(W);
+        Real far = 0, near2 = 0;
+        for (const Vec2 c : {Vec2{0, 0}, Vec2{def_.width, 0}, Vec2{0, def_.height}, Vec2{def_.width, def_.height}})
+            far = std::max(far, std::sqrt(sq(c.x - b.at.x) + sq(c.y - b.at.y) + sq(b.standoff)));
+        const Vec2 foot{clampr(b.at.x, 0, def_.width), clampr(b.at.y, 0, def_.height)};
+        near2 = sq(foot.x - b.at.x) + sq(foot.y - b.at.y) + sq(b.standoff);
+        constexpr int K = 96;
+        const Real r0 = 0.05, r1 = std::max(far * 1.01, 0.4);
+        Real t = 0, prev = r0;
+        for (int k = 0; k <= K; ++k) {
+            const Real R = r0 * std::pow(r1 / r0, static_cast<Real>(k) / K);
+            const Real mid = 0.5 * (prev + R);
+            t += (R - prev) / (kC0 * std::sqrt(1 + 6 * sideOnTNT(mid / cw) / (7 * kP0)));
+            prev = R;
+            const Real Z = std::max(0.3, R) / cw, ps = sideOnTNT(Z), td = phaseTNT(Z, W);
+            b.tabR.push_back(R);
+            b.tabT.push_back(t);
+            b.tabPs.push_back(ps);
+            b.tabPr.push_back(reflectedTNT(ps));
+            b.tabTd.push_back(td);
+            b.tabB.push_back(decayFor(impulseTNT(Z, W), ps, td));
+        }
+        auto at = [&](Real R, const std::vector<Real>& v) {
+            const auto it = std::upper_bound(b.tabR.begin(), b.tabR.end(), R);
+            const std::size_t i = std::min<std::size_t>(std::max<std::size_t>(it - b.tabR.begin(), 1), b.tabR.size() - 1);
+            const Real u = clampr((R - b.tabR[i - 1]) / (b.tabR[i] - b.tabR[i - 1]), 0, 1);
+            return v[i - 1] + u * (v[i] - v[i - 1]);
+        };
+        const Real Rn = std::sqrt(near2);
+        b.arrival = b.detonation + at(Rn, b.tabT);
+        b.lastArrival = b.detonation + at(far, b.tabT);
+        b.shortest = at(Rn, b.tabTd);
+        b.longest = at(far, b.tabTd);
+        b.duration = b.shortest;
+        b.peak = b.side * b.scale * at(Rn, b.tabPr) * sq(b.standoff / std::max(Rn, 1e-6)) +
+                 b.side * b.scale * at(Rn, b.tabPs) * (1 - sq(b.standoff / std::max(Rn, 1e-6)));
+        pointBlasts_ = true;
+        log(fmt("a %.2f kg charge %.2f m from the glass: the shock reaches it at %.2f ms", W, Rn,
+                (b.arrival - b.detonation) * 1e3) + fmt(" and its far corner at %.2f ms", (b.lastArrival - b.detonation) * 1e3));
+    }
     blasts_.push_back(b);
     log(fmt("blast due at %.2f ms: %.0f kPa reflected, %.2f ms positive phase", b.arrival * 1e3, b.peak / 1e3,
             b.duration * 1e3) + (b.gasPeak > 0 ? fmt(", %.0f kPa of gas", b.gasPeak / 1e3) : std::string()));
@@ -1859,6 +1986,25 @@ void Pane::blast(const BlastLoad& b) {
 Real Pane::blastPressure(Real t) const {
     Real p = 0;
     for (const auto& b : blasts_) p += b.pressure(t);
+    if (!pointBlasts_) return p;
+    // Where it presses hardest just now: over a grid, and where the charge is nearest.
+    Real best = 0;
+    auto consider = [&](Vec2 q) {
+        Real v = 0;
+        for (const auto& b : blasts_) v += b.pressureAt(t, q);
+        if (std::fabs(v) > std::fabs(best)) best = v;
+    };
+    constexpr int n = 8;
+    for (int j = 0; j < n; ++j)
+        for (int i = 0; i < n; ++i) consider({(i + 0.5) * def_.width / n, (j + 0.5) * def_.height / n});
+    for (const auto& b : blasts_)
+        if (b.point) consider({clampr(b.at.x, 0, def_.width), clampr(b.at.y, 0, def_.height)});
+    return best;
+}
+
+Real Pane::blastPressureAt(Real t, Vec2 q) const {
+    Real p = 0;
+    for (const auto& b : blasts_) p += b.pressureAt(t, q);
     return p;
 }
 
@@ -1866,11 +2012,12 @@ Real Pane::blastPressure(Real t) const {
 // there (its frame grip; the crazed sheet's friction is a few times a die's
 // weight, nothing against a blast): what cannot hold goes, with the glass's
 // own motion and a scatter from the turbulent jet.
-void Pane::blowOut(Real p) {
+void Pane::blowOut() {
     int n = 0;
     for (int i = 0; i < static_cast<int>(frags_.fragments().size()); ++i) {
         Fragment& f = frags_.fragments()[i];
         if (f.retired || f.chip || f.state != FragmentState::Held || f.clump >= 0) continue;
+        const Real p = blastPressureAt(time_, f.origin);
         if (std::fabs(p) * f.area <= def_.frameGrip * f.edgeContact + f.mass * kGravity) continue;
         f.vel = {rng_.uniform(-0.4, 0.4), rng_.uniform(-0.4, 0.4), plate_.velocity(f.origin.x, f.origin.y)};
         f.omega = {rng_.uniform(-15, 15), rng_.uniform(-15, 15), rng_.uniform(-8, 8)};
@@ -2102,8 +2249,7 @@ void Pane::freezeCheck() {
         int added = frags_.build(net, G.ply, 0.5 * (G.z0 + G.z1), G.z1 - G.z0, G.mat->density, time_);
         frags_.maxFragments = cap;
         if (pBlast > kBlastHold) {
-            const Real p = pBlast;
-            for (int pass = 0; pass < 10 && p > kBlastHold && breakUnderBlast(static_cast<int>(&G - glass_.data()), p, before); ++pass)
+            for (int pass = 0; pass < 10 && breakUnderBlast(static_cast<int>(&G - glass_.data()), before); ++pass)
                 frags_.build(net, G.ply, 0.5 * (G.z0 + G.z1), G.z1 - G.z0, G.mat->density, time_);
             added = 0;
             for (std::size_t i = before; i < frags_.fragments().size(); ++i)
@@ -2129,8 +2275,7 @@ void Pane::freezeCheck() {
         net.markRemovedCells(crushed);
         int freed = 0, pending = 0, held = 0;
         // A blast still pressing on the pane tears out whatever its hold cannot keep.
-        const Real pNow = std::fabs(blastPressure(time_));
-        const bool blown = pNow > kBlastHold;
+        const bool anyBlown = std::fabs(blastPressure(time_)) > kBlastHold;
         std::vector<int> sheetDice, sheetGone;
         std::vector<char> sheetFrame;
         for (std::size_t i = before; i < frags_.fragments().size(); ++i) {
@@ -2184,6 +2329,9 @@ void Pane::freezeCheck() {
                 else if (edgesTouched >= 2) supported = true;                      // wedged across a corner
                 else if (f.edges && def_.frameGrip * f.edgeContact >= f.mass * kGravity) supported = true;
             }
+            // A blast still pressing here tears out whatever its hold cannot keep.
+            const Real pNow = anyBlown ? std::fabs(blastPressureAt(time_, c)) : 0.0;
+            const bool blown = pNow > kBlastHold;
             if (blown && pNow * f.area > def_.frameGrip * f.edgeContact) supported = false;
             if (blown && !pushed && !supported) {
                 f.vel += Vec3{rng_.uniform(-0.4, 0.4), rng_.uniform(-0.4, 0.4), 0};
@@ -2235,17 +2383,22 @@ void Pane::freezeCheck() {
 // longer is cracked across its long axis, through its centroid, the crack
 // wandering a little until it meets another or an edge. Returns whether it
 // cracked any (the ply is then cut into pieces again).
-bool Pane::breakUnderBlast(int g, Real p, std::size_t from) {
+bool Pane::breakUnderBlast(int g, std::size_t from) {
     GlassPly& G = glass_[g];
     CrackNetwork& net = G.net;
     const Real h = G.z1 - G.z0, cell = net.cell();
     const Real strength = G.mat->weibullScale * rateFactor(time_ - blastOnset_) + G.surfaceCompression;
-    const Real L = std::max(6 * cell, h * std::sqrt(strength / (3 * p)));
     const std::uint32_t group = net.newGroup();
     int cracks = 0;
     for (std::size_t i = from; i < frags_.fragments().size(); ++i) {
         const Fragment& f = frags_.fragments()[i];
         if (f.retired || f.chip || f.ply != G.ply || f.bornAt != time_) continue;
+        // The blast where this piece is, now or as the ply broke, and the
+        // longest piece that pressure does not break.
+        const Real p = std::max(std::fabs(blastPressureAt(time_, f.origin)),
+                                std::fabs(blastPressureAt(std::max(G.originTime, blastOnset_), f.origin)));
+        if (p <= kBlastHold) continue;
+        const Real L = std::max(6 * cell, h * std::sqrt(strength / (3 * p)));
         // Its long axis, from the outline's spread about the centroid.
         Real sxx = 0, syy = 0, sxy = 0;
         for (const Vec2& q : f.outline) sxx += q.x * q.x, syy += q.y * q.y, sxy += q.x * q.y;
@@ -2311,8 +2464,8 @@ bool Pane::breakUnderBlast(int g, Real p, std::size_t from) {
     }
     net.compactTips();
     if (cracks)
-        log(fmt("the blast keeps breaking ply %.0f: %.0f pieces longer than %.0f cm cracked across", g + 1.0,
-                static_cast<double>(cracks), 100 * L));
+        log(fmt("the blast keeps breaking ply %.0f: %.0f pieces too long for it cracked across", g + 1.0,
+                static_cast<double>(cracks)));
     return cracks > 0;
 }
 

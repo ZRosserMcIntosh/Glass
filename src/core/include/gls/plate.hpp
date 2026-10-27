@@ -70,6 +70,9 @@ public:
     void clearForces();
     void addPatch(Real x, Real y, Real radius, Real force);  // uniform disc load, + toward the back face
     void addPressure(Real p);                                // uniform pressure
+    // A pressure field: p[j * nx + i] uniform over cell (i, j) of an nx x ny
+    // grid over the plate, projected exactly onto the modes.
+    void addPressureField(const std::vector<Real>& p, int nx, int ny);
     void settleStatic();  // jump to static equilibrium under the current loads
 
     void step(Real dt);
@@ -121,6 +124,8 @@ private:
     int M_ = 0, N_ = 0;
     std::vector<Real> q_, v_, f_, omega_, sigX_, sigY_, kX_, kY_;
     Real modalMass_ = 1;
+    int fieldNx_ = 0, fieldNy_ = 0;
+    std::vector<Real> fieldX_, fieldY_, fieldT_;   // per mode and cell: integral of the mode shape over the cell
     // Exact-step coefficients for the last dt.
     Real cacheDt_ = -1;
     std::vector<Real> c11_, c12_, c21_, c22_, g1_, g2_;
