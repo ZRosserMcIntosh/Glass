@@ -45,6 +45,27 @@
       }
     },
     {
+      "id": "steel_ball_4110",
+      "name": "Steel ball 4.11 kg",
+      "category": "test",
+      "description": "The 100 mm ball of the EN 356 burglar-resistance test, dropped three times onto a triangle.",
+      "kind": "sphere",
+      "mass_g": 4110,
+      "radius_mm": 50,
+      "youngs_GPa": 210,
+      "poisson": 0.3,
+      "density_kgm3": 7850,
+      "yield_MPa": 5500,
+      "speed_ms": 13.29,
+      "min_speed_ms": 1,
+      "max_speed_ms": 25,
+      "provenance": {
+        "mass_g": "published: EN 356, 4.11 kg +- 0.06 kg",
+        "radius_mm": "published: EN 356, 100 mm +- 0.5 mm diameter",
+        "speed_ms": "published: EN 356 P4A/P5A, 9 m drop height"
+      }
+    },
+    {
       "id": "baseball",
       "name": "Baseball",
       "category": "everyday",
@@ -261,6 +282,28 @@
       }
     },
     {
+      "id": "twin_tyre_50",
+      "name": "Twin-tyre impactor 50 kg",
+      "category": "test",
+      "description": "The pendulum of the EN 12600 safety-glass test: two inflated tyres on a steel body, swung into the pane.",
+      "kind": "sphere",
+      "mass_g": 50000,
+      "radius_mm": 180,
+      "youngs_GPa": 0.002,
+      "poisson": 0.45,
+      "density_kgm3": 2050,
+      "restitution": 0.5,
+      "speed_ms": 4.85,
+      "min_speed_ms": 1,
+      "max_speed_ms": 8,
+      "provenance": {
+        "mass_g": "published: EN 12600, 50 kg +- 0.1 kg",
+        "speed_ms": "published: EN 12600 class 1, 1200 mm drop height",
+        "radius_mm": "estimated: 3.50-R8 tyres (~400 mm across) as one sphere",
+        "youngs_GPa": "estimated: tyres at 3.5 bar, effective Hertz modulus"
+      }
+    },
+    {
       "id": "timber_2x4",
       "name": "2x4 timber missile",
       "category": "weather",
@@ -279,6 +322,73 @@
       "provenance": {
         "mass_g": "published: ASTM E1996 missile D, 4100 g 2x4",
         "speed_ms": "published: ASTM E1996 missile D, 15.2 m/s",
+        "radius_mm": "estimated: equal-area radius of a 38 x 89 mm end",
+        "yield_MPa": "published: end-grain crushing strength of softwood, 30-50 MPa"
+      }
+    },
+    {
+      "id": "steel_ball_2g",
+      "name": "Steel ball 2 g (missile A)",
+      "category": "weather",
+      "description": "ASTM E1996 missile A: roof gravel, fired 30 at a time at 40 m/s.",
+      "kind": "sphere",
+      "mass_g": 2,
+      "radius_mm": 3.93,
+      "youngs_GPa": 210,
+      "poisson": 0.3,
+      "density_kgm3": 7850,
+      "yield_MPa": 5000,
+      "speed_ms": 39.62,
+      "min_speed_ms": 5,
+      "max_speed_ms": 80,
+      "provenance": {
+        "mass_g": "published: ASTM E1996 missile A, 2 g +- 5 % steel ball",
+        "speed_ms": "published: ASTM E1996 missile A, 130 ft/s",
+        "radius_mm": "published: a 2 g steel ball is 7.9 mm across"
+      }
+    },
+    {
+      "id": "timber_2x4_b",
+      "name": "2x4 timber missile B (0.91 kg)",
+      "category": "weather",
+      "description": "ASTM E1996 missile B: a 0.5 m stud end-on at 15.2 m/s.",
+      "kind": "flat",
+      "mass_g": 910,
+      "radius_mm": 33,
+      "length_mm": 525,
+      "youngs_GPa": 10,
+      "poisson": 0.3,
+      "density_kgm3": 500,
+      "yield_MPa": 40,
+      "speed_ms": 15.25,
+      "min_speed_ms": 2,
+      "max_speed_ms": 40,
+      "provenance": {
+        "mass_g": "published: ASTM E1996 missile B, 910 g 2x4",
+        "speed_ms": "published: ASTM E1996 missile B, 50 ft/s",
+        "radius_mm": "estimated: equal-area radius of a 38 x 89 mm end",
+        "yield_MPa": "published: end-grain crushing strength of softwood, 30-50 MPa"
+      }
+    },
+    {
+      "id": "timber_2x4_c",
+      "name": "2x4 timber missile C (2.05 kg)",
+      "category": "weather",
+      "description": "ASTM E1996 missile C: a 1.2 m stud end-on at 12.2 m/s.",
+      "kind": "flat",
+      "mass_g": 2050,
+      "radius_mm": 33,
+      "length_mm": 1200,
+      "youngs_GPa": 10,
+      "poisson": 0.3,
+      "density_kgm3": 500,
+      "yield_MPa": 40,
+      "speed_ms": 12.19,
+      "min_speed_ms": 2,
+      "max_speed_ms": 40,
+      "provenance": {
+        "mass_g": "published: ASTM E1996 missile C, 2050 g 2x4",
+        "speed_ms": "published: ASTM E1996 missile C, 40 ft/s",
         "radius_mm": "estimated: equal-area radius of a 38 x 89 mm end",
         "yield_MPa": "published: end-grain crushing strength of softwood, 30-50 MPa"
       }
