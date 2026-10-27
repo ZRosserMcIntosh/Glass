@@ -41,6 +41,9 @@ struct Material {
     Real tensile = 0;                 // Pa, strength at impact rates
     Real failureStrain = 0;           // engineering strain at break
     Real flowStress = 0;              // Pa; interlayer membrane flow (yield) stress
+    // Broken laminate: the interlayer's strain where it bridges a crack in the
+    // glass (and the shard edges bite into it) over its mean strain.
+    Real crackStrain = 1;
 
     std::map<std::string, std::string> provenance;  // field -> "published: source"
     Real shearModulus() const { return shear > 0 ? shear : youngs / (2 * (1 + poisson)); }

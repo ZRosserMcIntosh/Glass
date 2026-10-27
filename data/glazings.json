@@ -145,13 +145,13 @@
       "height_m": 1.2,
       "damping": 0.03,
       "frame_grip_Nm": 400,
-      "edge_hold_kNm": 30,
+      "edge_hold_kNm": 75,
       "plies": [
         { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "heat_strengthened", "surface_compression_MPa": 40 },
         { "material": "ionoplast", "thickness_mm": 2.28 },
         { "material": "soda_lime_float", "thickness_mm": 6, "treatment": "heat_strengthened", "surface_compression_MPa": 40 }
       ],
-      "provenance": { "plies": "estimated: a representative large-missile layup" }
+      "provenance": { "plies": "estimated: a representative large-missile layup", "edge_hold_kNm": "estimated: large-missile glazing is wet-glazed with structural silicone on both faces over a 1 in (25 mm) bite, ~1.5 MPa at break in the joint (ASTM C1135): ~75 kN/m" }
     },
     {
       "id": "ul752_l1",

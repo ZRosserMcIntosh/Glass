@@ -182,6 +182,7 @@ void readMaterial(const json::Value& o, std::vector<Material>& out, std::vector<
     r.num("tensile_MPa", 1e6, m.tensile, 0, 1e4);
     r.num("failure_strain", 1, m.failureStrain, 0, 20);
     r.num("flow_MPa", 1e6, m.flowStress, 0, 1e4);
+    r.num("crack_strain_factor", 1, m.crackStrain, 1, 20);
     r.provenance(m.provenance);
     r.finish();
     if (m.id.empty()) r.error("missing id");

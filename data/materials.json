@@ -78,13 +78,15 @@
       "tensile_MPa": 32,
       "flow_MPa": 20,
       "failure_strain": 2.0,
+      "crack_strain_factor": 3.0,
       "provenance": {
         "density_kgm3": "published: PVB interlayer data sheets, 1.07 g/cm3",
         "youngs_GPa": "published: initial modulus of PVB at strain rates 1e2-1e3 /s, 0.1-0.4 GPa (Iwasaki et al. 2007; Morison 2007)",
         "shear_MPa": "estimated: PVB shear modulus at 20 C for millisecond loads from published Prony series, 10-50 MPa",
         "tensile_MPa": "published: tensile strength at high strain rate, ~30-35 MPa (Liu et al. 2012)",
         "flow_MPa": "published: high-rate yield / plateau stress of PVB, 15-25 MPa (Liu et al. 2012)",
-        "failure_strain": "published: elongation at break at high rate, 150-250 % (Iwasaki et al. 2007)"
+        "failure_strain": "published: elongation at break at high rate, 150-250 % (Iwasaki et al. 2007)",
+        "crack_strain_factor": "calibrated: broken laminate tears where the PVB bridges a crack and the shard edges bite, so that 0.76 mm PVB laminates rate EN 356 P2A (not P4A) and 0.38 mm ones do not reach P2A"
       }
     },
     {
@@ -98,13 +100,15 @@
       "tensile_MPa": 38,
       "flow_MPa": 28,
       "failure_strain": 3.0,
+      "crack_strain_factor": 1.25,
       "provenance": {
         "density_kgm3": "published: ionoplast interlayer data sheets, 0.95 g/cm3",
         "youngs_GPa": "published: 0.3-0.9 GPa at room temperature (manufacturer data sheet)",
         "shear_MPa": "published: ~100+ MPa shear relaxation modulus at 20 C, 1 s (manufacturer data sheet)",
         "tensile_MPa": "published: 34.5 MPa tensile strength (manufacturer data sheet)",
         "flow_MPa": "estimated: high-rate yield stress",
-        "failure_strain": "published: elongation at break ~400 % quasi-static; lower at impact rates (estimated 300 %)"
+        "failure_strain": "published: elongation at break ~400 % quasi-static; lower at impact rates (estimated 300 %)",
+        "crack_strain_factor": "calibrated: ionoplast resists tearing at the crack edges far better than PVB; glazing of 2.28 mm with heat-strengthened glass passes ASTM E1996 missile E"
       }
     },
     {

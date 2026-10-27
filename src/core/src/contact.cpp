@@ -233,7 +233,7 @@ Real Membrane::force(Real delta) {
     rimStrain_ = strainAt(Nc) * conc_;
     bool tore = false;
     for (auto& p : plies_)
-        if (!p.torn && rimStrain_ >= p.failureStrain) { p.torn = true; tore = true; }
+        if (!p.torn && rimStrain_ * p.crackStrain >= p.failureStrain) { p.torn = true; tore = true; }
     if (tore) tabulate();
     return 2 * kPi * Rc_ * Nc * (delta / len);
 }

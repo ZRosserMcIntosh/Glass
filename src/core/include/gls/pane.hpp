@@ -81,6 +81,12 @@ struct Impactor {
     Ballistic ballistic;
     Membrane membrane;
     Real membraneZ0 = 0, membraneMax = 0, membraneSet = 0;
+    // How far the broken laminate can dish (m: the frame, all round) and its
+    // mass per area with the glass still bonded to it (kg/m2).
+    Real membraneFrame = 0, membraneMass = 0;
+    // The rim of what presses on it, and how far the sheet has spread the load
+    // beyond that so far (m).
+    Real membraneRim = 0, membraneSpread = 0;
     // Pushing through a broken monolithic pane: the force decays while the
     // impactor shoves the broken glass ahead of it.
     bool pushing = false, wedge = false;
@@ -277,6 +283,7 @@ public:
     bool pulledOut() const { return pulledOut_; }
     // N/m of in-plane pull the frame holds the laminate's edge against.
     Real edgeHold() const;
+    Real bendLength();
     Real blastPressure(Real t) const;  // Pa, all blasts at engine time t
     const std::vector<BlastLoad>& blasts() const { return blasts_; }
 
@@ -332,6 +339,7 @@ private:
     Real time_ = 0, lastDt_ = 0, lastProbe_ = -1, lastDynamic_ = -1e9, lastLoaded_ = -1e9;
     bool monolithic_ = true;
     std::vector<MembranePly> membranePlies_;
+    Real bendLength_ = 0;   // m, how far broken laminate spreads a load beyond what presses on it
     Real fragTime_ = 0;  // pieces step at their own fixed rate
     std::vector<Curvature> kGrid_;
     int kNx_ = 0, kNy_ = 0;

@@ -96,6 +96,36 @@ applied surface tension; the core tension drives running cracks.
   (concentric cracks on the impact face, edge breaks); probes inside the
   near-field zone of a load leave it to the load-point model.
 
+**Broken laminate.** Once every glass ply under a blunt load is broken, the
+interlayer takes it as an axisymmetric membrane: tension N(r) = N_c R_c / r
+from the rim R_c of what presses on it, stiffened ×2 by the glass still bonded
+to it, tearing when the rim strain reaches the interlayer's elongation at
+break. Three things set how much it takes:
+
+- *Span.* The dished zone starts as the ring round the hit (5 R_c, at least
+  0.2 m) and spreads as the bend travels out through the sheet, at
+  √(N/μ) with the tension at its edge and μ the laminate's mass per area, out
+  to the frame: the geometric mean of the distances to the four edges, so a
+  hit near a corner still dishes away from it. A slow heavy push (a 2x4, a
+  falling ball) spreads it far; a fast one tears first.
+- *Spread.* Broken laminate is not a bare film: its glass pieces stay stuck
+  to the interlayer and lock together where they are pushed, so it keeps a
+  bending stiffness D ≈ E t h² (interlayer in tension, glass in compression
+  over half the laminate) and spreads a load over the bending length √(D/N_y)
+  beyond what presses on it, building up at the same bend speed. A stiff
+  interlayer spreads it about twice as far as PVB (ionoplast 33 mm, PVB
+  9–19 mm in the library's layups): the post-breakage stiffness ionoplast is
+  chosen for. Behind a projectile there is nothing to spread it: the
+  ballistic model has crushed the glass in its path to powder.
+- *Crack bridging.* Where the interlayer spans a crack in the glass and the
+  shard edges bite into it, its strain runs above the mean: a per-material
+  factor (PVB 3, ionoplast 1.25, calibrated below) on the rim strain against
+  the elongation at break.
+
+The membrane's pull at the nearest frame edge, N_c R_c / d, against the
+frame's hold (a sealant bond over the bite, or the glazing's own value)
+decides whether the edge slides out of its rebate and the whole laminate goes.
+
 ## 4. Running cracks
 
 Each crack is a polyline with a birth time at every vertex, grown tip by tip
@@ -337,7 +367,9 @@ All in [`pane.cpp`](../src/core/src/pane.cpp) and
 | Dice energy fraction η | 0.5 | ECE R43 counts for 4–6 mm fully tempered |
 | Wedge support (monolithic / laminated) | 1.0 / 0.15 | tip-loaded cantilever / bonded wedges |
 | Auerbach constant | 5×10⁴ N/m | literature range 10⁴–10⁵ for soda-lime |
-| Interlayer membrane stiffening, rim strain concentration | 2.0, 1.0 | ECE R43: 2.26 kg from 4 m held, from ~20 m/s torn |
+| Interlayer membrane stiffening, rim strain concentration | 2.0, 1.0 | ECE R43: 2.26 kg from 4 m held, from ~15 m/s torn |
+| Crack-bridging strain factor (per interlayer) | PVB 3.0, ionoplast 1.25 | EN 356: 0.76 mm PVB laminates rate P2A (hold three 3 m drops, not three 9 m ones), 0.38 mm ones not P2A; ASTM E1996: 2.28 mm ionoplast with heat-strengthened glass passes missiles D and E, corner shots included |
+| Hurricane glazing's frame hold | 75 kN/m | structural silicone on both faces over a 1 in bite (ASTM C1135 joint strength ~1.5 MPa); E1996 corner shots need 62–69 kN/m |
 | Comminution energy, interlayer and backing fractions, mushroom coefficient | 40 MJ/m³, 0.01, 0.05, 0.3 | UL 752 Levels 1, 3, 8 |
 | Rubble fraction, ricochet angle | 0.15, 72° | estimated (no published per-hit data for repeat hits on one crater; FMJ on glass ricochets near grazing) |
 | Light band of a crack | 6 mm | estimated: glints either side of a crack line; with crushed area and open area this gives the status's visibility |

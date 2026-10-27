@@ -89,6 +89,7 @@ Real hertzEdgeTension(Real force, Real contactRadius, Real poisson);
 struct MembranePly {
     Real thickness = 0, youngs = 0, flow = 0, tensile = 0, failureStrain = 0;
     bool torn = false;
+    Real crackStrain = 1;   // strain where it bridges a crack in the broken glass, over the mean
 };
 
 class Membrane {
@@ -102,6 +103,8 @@ public:
     Real strength() const;
     // The impactor wraps the membrane as it goes deeper: the rim grows.
     void setRim(Real r) { Rc_ = clampr(r, 1e-3, 0.95 * Rm_); }
+    // The dished zone spreads as the bend travels out through the sheet.
+    void setOuter(Real r) { Rm_ = std::max(r, 1.5 * Rc_); }
     Real rimStrain() const { return rimStrain_; }
     Real rimTension() const { return rimTension_; }  // N/m at the rim, from the last force()
     Real outerRadius() const { return Rm_; }

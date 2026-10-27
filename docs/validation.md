@@ -14,13 +14,19 @@ built to that standard does, not a certification.
 | 227 g steel ball from 2 m on 4 mm tempered car side glass | UN ECE R43 Annex 5: must not break | Holds (peak 3.3 kN) |
 | Window punch on 4 mm tempered side glass | ECE R43 fragmentation: 40–400 pieces in any 50 × 50 mm square | Dices; energy-balance dice 4.0 mm, ≈156 per square |
 | 2.26 kg ball from 4 m on a 2.1 / 0.76 PVB / 2.1 windscreen | ECE R43 Annex 6, ANSI Z26.1 test 26: the ball must not pass | Both plies break, the PVB holds: 62 mm bulge |
-| The same ball at 20 m/s | (beyond the test) | Tears through |
+| The same ball at 15 m/s and faster | (beyond the test) | Tears through |
 | Road stone, 6 g at 30 m/s, on the windscreen | Field experience: a star break in the outer ply | Outer ply cracks, inner ply intact, stone bounces |
 | Window punch on the windscreen | Laminated glass is why punches don't work on windscreens | Outer ply chipped, barrier intact |
 | Occupant head (4.5 kg, 7 m/s) from inside | Windscreen as a restraint | Held |
 | 45 kg bag from 48 in, annealed 6 mm | 16 CFR 1201 / ANSI Z97.1: annealed is not safety glazing | Breaks into large shards (ten largest > 10 in²) |
 | The same bag, tempered 6 mm | 16 CFR 1201: unbroken, or the ten largest pieces under 10 in² | Holds on some seeds, dices safely on others |
-| 2x4 (4.1 kg) at 15.2 m/s on a hurricane laminate | ASTM E1996 missile D: no penetration | Glass cracks, interlayer holds |
+| 2x4 (4.1 kg) at 15.2 m/s on a hurricane laminate, centre then corner | ASTM E1996 missile D: no penetration | Glass cracks, interlayer holds; the corner shot holds in the frame |
+| The same 2x4 at 24.4 m/s, centre then corner | ASTM E1996 missile E (essential facilities) | Interlayer holds, 91 mm bulge |
+| 2x4 missiles B (0.9 kg) and C (2.05 kg) on the hurricane laminate | ASTM E1996 B, C | Held |
+| Missile D on 5 / 0.76 PVB / 5 | Not a large-missile layup | Tears through the PVB |
+| 4.11 kg ball, three drops on a 130 mm triangle, on 5 / 0.76 PVB / 5 | EN 356: 0.76 mm PVB laminates rate P2A | P2A (3 m) and P3A (6 m) held; P4A (9 m) torn through |
+| The same on 3 / 0.38 PVB / 3 | EN 356: below P2A | P1A held; P2A torn through on most panes |
+| Nine 9 m drops on the hurricane laminate | EN 356 P5A | Held |
 | 9 mm FMJ at 380 m/s on a 30 mm all-glass laminate | UL 752 Level 1 | Stopped 13 mm in (third glass ply) |
 | .44 Magnum at 430 m/s on 32 mm glass-clad polycarbonate | UL 752 Level 3 | Stopped 19 mm in |
 | 7.62 × 51 at 850 m/s on the Level 3 panel | Not rated: should perforate | Perforates, exits at 561 m/s |

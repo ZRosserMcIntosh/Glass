@@ -119,7 +119,7 @@ Pane::Pane(const GlazingDef& def, const Budget& budget, std::uint64_t seed) : de
         if (L.kind != MaterialKind::Glass) {
             monolithic_ = false;
             const Material* m = def_.plies[L.ply].mat;
-            membranePlies_.push_back({L.z1 - L.z0, m->youngs, m->flowStress, m->tensile, m->failureStrain, false});
+            membranePlies_.push_back({L.z1 - L.z0, m->youngs, m->flowStress, m->tensile, m->failureStrain, false, m->crackStrain});
             continue;
         }
         GlassPly G;
@@ -645,7 +645,26 @@ void Pane::stepImpactor(int k, Real dt) {
             if (I.def.kind == ImpactorKind::Sphere || I.def.kind == ImpactorKind::SoftBody ||
                 I.def.kind == ImpactorKind::Projectile) {
                 const Real R = I.def.radius, dd = std::min(std::max(delta, 0.0), R);
-                I.membrane.setRim(std::max(0.5 * R, std::sqrt(2 * R * dd - dd * dd)));
+                I.membraneRim = std::max(0.5 * R, std::sqrt(2 * R * dd - dd * dd));
+            }
+            // The broken sheet spreads the load beyond the rim as the bend
+            // travels out, up to its bending length. Not behind a projectile:
+            // it crushed the glass in its path to powder, with no pieces left
+            // to lock together.
+            if (I.def.kind != ImpactorKind::Projectile && I.membraneSpread < bendLength() && I.membrane.rimTension() > 0) {
+                const Real c = std::sqrt(I.membrane.rimTension() / std::max(I.membraneMass, 1.0));
+                I.membraneSpread = std::min(bendLength(), I.membraneSpread + c * dt);
+            }
+            I.membrane.setRim(I.membraneRim + I.membraneSpread);
+            // The dished zone spreads at the speed of a bend in the sheet,
+            // sqrt(tension / mass per area) with the tension at its edge,
+            // out to the frame.
+            if (I.membrane.outerRadius() < I.membraneFrame && I.membrane.rimTension() > 0) {
+                const Real Nout = I.membrane.rimTension() * I.membrane.rimRadius() / I.membrane.outerRadius();
+                const Real c = std::sqrt(Nout / std::max(I.membraneMass, 1.0));
+                I.membrane.setOuter(std::min(I.membraneFrame, I.membrane.outerRadius() + c * dt));
+                for (auto& b : bulges_)
+                    if (b.impactor == k) b.outer = I.membrane.outerRadius();
             }
             Real F;
             if (delta >= I.membraneMax) {
@@ -672,8 +691,8 @@ void Pane::stepImpactor(int k, Real dt) {
             // reaches the nearest edge is more than the frame holds, the edge
             // slides out of its rebate and the whole laminate goes.
             if (!I.membrane.torn() && I.membrane.rimTension() > 0) {
-                const Real edge = std::max({I.membrane.outerRadius(),
-                                            std::min(std::min(I.hit.x, def_.width - I.hit.x), std::min(I.hit.y, def_.height - I.hit.y))});
+                const Real edge = std::max(I.membrane.rimRadius(),
+                                           std::min(std::min(I.hit.x, def_.width - I.hit.x), std::min(I.hit.y, def_.height - I.hit.y)));
                 const Real pull = I.membrane.rimTension() * I.membrane.rimRadius() / edge;
                 if (pull > edgeHold()) {
                     pullOut(k, pull);
@@ -1140,13 +1159,40 @@ void Pane::passThrough(int k, Real) {
     log("broken under the load: shoving the broken glass aside");
 }
 
+// Broken laminate is not a bare film: its glass pieces stay stuck to the
+// interlayer and lock together where they are pushed, so the sheet keeps a
+// bending stiffness D ~ E t h^2 (the interlayer in tension, the glass in
+// compression across a lever arm h of half the laminate) and spreads a load
+// over the bending length sqrt(D / N) beyond what presses on it, with N its
+// tension at yield. A stiff interlayer (ionoplast) spreads it about twice as
+// far as PVB: the post-breakage stiffness it is chosen for. The spread takes
+// time to build (Membrane phase): a slow push gets all of it.
+Real Pane::bendLength() {
+    if (bendLength_ > 0 || membranePlies_.empty()) return bendLength_;
+    const Real h = 0.5 * lam_.thickness;
+    Real Et = 0, Nt = 0;
+    for (const auto& p : membranePlies_) { Et += p.youngs * p.thickness; Nt += p.flow * p.thickness; }
+    bendLength_ = Nt > 0 ? h * std::sqrt(Et / Nt) : 0;
+    return bendLength_;
+}
+
 void Pane::startMembrane(int k) {
     Impactor& I = imp_[k];
     if (membranePlies_.empty()) return;
     const Real R = I.def.radius;
     const Real rim = clampr(std::max(I.contactRadius, 0.6 * R), 0.004, std::max(0.004, R));
-    const Real edge = std::min(std::min(I.hit.x, def_.width - I.hit.x), std::min(I.hit.y, def_.height - I.hit.y));
-    const Real outer = std::max(1.6 * rim, std::min(0.95 * edge, std::max(5 * rim, 0.2)));
+    I.membraneRim = rim;
+    I.membraneSpread = 0;
+    // The broken laminate dishes out to the frame, which is near on one side
+    // and far on another: its reach is the geometric mean of the distances to
+    // the four edges. It starts as the zone round the hit and spreads from
+    // there (Membrane phase).
+    const Real dx0 = std::max(I.hit.x, 1e-3), dx1 = std::max(def_.width - I.hit.x, 1e-3);
+    const Real dy0 = std::max(I.hit.y, 1e-3), dy1 = std::max(def_.height - I.hit.y, 1e-3);
+    I.membraneFrame = 0.95 * std::sqrt(std::sqrt(dx0 * dx1 * dy0 * dy1));
+    const Real outer = std::max(1.6 * rim, std::min(I.membraneFrame, std::max(5 * rim, 0.2)));
+    I.membraneMass = 0;
+    for (const auto& p : def_.plies) I.membraneMass += p.mat->density * p.thickness;
     I.membrane.configure(membranePlies_, rim, outer, kFragmentStiffening, kStrainConcentration);
     const Real w = plate_.deflection(I.hit);
     I.membraneZ0 = (I.side > 0 ? 0.0 : lam_.thickness) + w;

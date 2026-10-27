@@ -459,6 +459,37 @@ TEST_CASE("cannonball: rifle-rated glass is ripped out of its frame and goes wit
     CHECK_NEAR(sheet.vel.z, I.vel.z, 0.05);  // (read a fracture step apart)
 }
 
+// Drops (or missiles) one after another on a pane of the specimen's size, each
+// once the last is over; true if any goes through.
+static bool rounds(const char* glazing, const char* impactor, double w, double h, std::vector<gls::Vec2> at, double speed) {
+    const auto& lib = glstest::library();
+    gls::GlazingDef g = *lib.glazing(glazing);
+    if (w > 0) { g.width = w; g.height = h; }
+    gls::Pane pane(g, gls::budgetForTier(2), 1);
+    for (std::size_t k = 0; k < at.size(); ++k) {
+        pane.fire(*lib.impactor(impactor), at[k], speed, 0, 0, false, 0.05);
+        const double t0 = pane.time();
+        for (int f = 0; f < 4000 && pane.time() < t0 + 0.6; ++f) {
+            pane.advance(pane.time() + 1.0 / 120);
+            if (!pane.impactors()[k].report.outcome.empty() && pane.time() > t0 + 0.3) break;
+        }
+        if (pane.impactors()[k].report.penetrated || pane.pulledOut()) return true;
+    }
+    return false;
+}
+
+TEST_CASE("laminates: PVB rates EN 356 P2A; ionoplast holds ASTM E1996 missiles D and E") {
+    // EN 356: a 4.11 kg ball three times onto a 130 mm triangle of a 0.9 x 1.1 m specimen.
+    const std::vector<gls::Vec2> tri{{0.45, 0.625}, {0.385, 0.5125}, {0.515, 0.5125}};
+    CHECK(!rounds("laminated_10_76", "steel_ball_4110", 0.9, 1.1, tri, std::sqrt(2 * 9.80665 * 3.0)));   // P2A
+    CHECK(rounds("laminated_10_76", "steel_ball_4110", 0.9, 1.1, tri, std::sqrt(2 * 9.80665 * 9.0)));    // not P4A
+    // E1996: the 2x4 at the centre, then near a corner.
+    const std::vector<gls::Vec2> cc{{0.6, 0.6}, {0.15, 0.15}};
+    CHECK(!rounds("hurricane", "timber_2x4", -1, -1, cc, 15.25));   // missile D
+    CHECK(!rounds("hurricane", "timber_2x4", -1, -1, cc, 24.38));   // missile E
+    CHECK(rounds("laminated_10_76", "timber_2x4", -1, -1, {{0.55, 1.275}}, 15.25));   // PVB is no large-missile layup
+}
+
 TEST_CASE("cannonball: a thin interlayer tears round the ball; a bullet still plugs thick armour") {
     // PVB a few mm thick cannot drag 24 kg of glass: it tears round the ball.
     const auto l1 = shoot("ul752_l1", "cannonball_9lb", -1, 1);
