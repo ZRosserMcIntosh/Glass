@@ -34,3 +34,7 @@ captures/
 *.csv
 !benchmarks/*.csv
 web/dist/
+
+# ---- Glass cockpit (Node) ----
+node_modules/
+/dist/
